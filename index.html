@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>2026 북중미 월드컵 승부예측 대진표</title>
+<style>
+  :root{
+    --bg:#0b1220;
+    --panel:#121c2e;
+    --panel2:#18253b;
+    --line:#26344d;
+    --text:#e8eef7;
+    --muted:#8da2bd;
+    --accent:#22c55e;
+    --accent2:#16a34a;
+    --gold:#f5c518;
+    --me:#3b82f6;
+    --rival:#f97316;
+    --actual:#22c55e;
+    --danger:#ef4444;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+    background:radial-gradient(1200px 600px at 50% -10%,#16243c 0%,var(--bg) 60%);
+    color:var(--text);
+    min-height:100vh;
+  }
+  header{
+    position:sticky;top:0;z-index:50;
+    background:rgba(11,18,32,.92);
+    backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);
+    padding:10px 16px;
+  }
+  .title-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .title-row h1{font-size:18px;margin:0;letter-spacing:-.3px;}
+  .title-row .sub{color:var(--muted);font-size:12px;}
+  .spacer{flex:1;}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center;}
+  .profiles{display:flex;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:4px;}
+  .profile-btn{
+    border:0;background:transparent;color:var(--muted);
+    padding:7px 14px;border-radius:9px;cursor:pointer;font-weight:600;font-size:13px;
+    display:flex;align-items:center;gap:6px;transition:.15s;
+  }
+  .profile-btn .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  .profile-btn[data-p="me"] .dot{background:var(--me);}
+  .profile-btn[data-p="rival"] .dot{background:var(--rival);}
+  .profile-btn[data-p="actual"] .dot{background:var(--actual);}
+  .profile-btn.active{color:#fff;}
+  .profile-btn.active[data-p="me"]{background:rgba(59,130,246,.18);}
+  .profile-btn.active[data-p="rival"]{background:rgba(249,115,22,.18);}
+  .profile-btn.active[data-p="actual"]{background:rgba(34,197,94,.18);}
+  .btn{
+    border:1px solid var(--line);background:var(--panel);color:var(--text);
+    padding:8px 12px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;transition:.15s;
+  }
+  .btn:hover{background:var(--panel2);border-color:#33456a;}
+  .btn.primary{background:var(--accent2);border-color:var(--accent);color:#fff;}
+  .btn.primary:hover{background:var(--accent);}
+  .btn.danger{color:#ffd9d9;border-color:#5b2a2a;background:#2a1414;}
+  .btn.danger:hover{background:#3a1a1a;}
+
+  main{padding:16px;}
+  .editing-banner{
+    font-size:13px;color:var(--muted);margin:0 0 12px;
+  }
+  .editing-banner b{color:var(--text);}
+
+  /* Bracket - 아래(32강)에서 위(우승)로 올라가는 세로 토너먼트 (가로 스크롤 없이 한 화면) */
+  .bracket-wrap{padding-bottom:8px;}
+  .bracket{display:flex;flex-direction:column;gap:10px;align-items:center;width:100%;}
+  .round{display:flex;flex-direction:column;align-items:center;width:100%;}
+  .round-title{
+    text-align:center;font-size:11px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;
+  }
+  .matches{display:flex;flex-direction:row;justify-content:center;gap:5px;flex-wrap:nowrap;width:100%;}
+  .round.champion .matches{justify-content:center;}
+  .match{
+    background:var(--panel);border:1px solid var(--line);border-radius:7px;
+    overflow:hidden;flex:1 1 0;min-width:0;max-width:120px;
+  }
+  .slot{
+    display:flex;align-items:center;gap:3px;padding:3px 5px;cursor:pointer;
+    border-left:3px solid transparent;min-height:26px;position:relative;transition:.12s;
+  }
+  .slot + .slot{border-top:1px solid var(--line);}
+  .slot:hover{background:var(--panel2);}
+  .slot.empty{color:var(--muted);font-style:normal;cursor:default;}
+  .slot.dragover{background:rgba(34,197,94,.16);border-left-color:var(--accent);}
+  .slot .flag{font-size:15px;line-height:1;width:18px;text-align:center;flex:none;}
+  .slot .name{font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;}
+  .slot.winner{border-left-color:var(--accent);background:rgba(34,197,94,.10);}
+  .slot.winner .name{color:#bbf7d0;}
+  .slot.loser{opacity:.42;}
+  .slot .rm{
+    margin-left:auto;border:0;background:transparent;color:var(--muted);
+    cursor:pointer;font-size:11px;padding:0 2px;border-radius:5px;flex:none;
+  }
+  .slot .rm:hover{background:#33456a;color:#fff;}
+  .slot .seed{display:none;}
+
+  .champion-box{
+    background:linear-gradient(160deg,#1e2a16,#121c2e);
+    border:1px solid var(--gold);border-radius:12px;padding:8px 22px;text-align:center;min-width:180px;
+  }
+  .champion-box .label{font-size:11px;color:var(--gold);font-weight:700;letter-spacing:1px;}
+  .champion-box .flag{font-size:30px;margin:3px 0;}
+  .champion-box .name{font-size:16px;font-weight:800;}
+  .champion-box .empty{color:var(--muted);font-size:12px;padding:4px 0;}
+
+  /* Pool - 조별 세로 컬럼 그리드 */
+  .pool-section{margin-top:16px;border-top:1px solid var(--line);padding-top:12px;}
+  .pool-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
+  .pool-head h2{font-size:15px;margin:0;}
+  .pool-head .hint{font-size:12px;color:var(--muted);}
+  .search{
+    border:1px solid var(--line);background:var(--panel);color:var(--text);
+    padding:7px 12px;border-radius:10px;font-size:13px;min-width:180px;
+  }
+  .pool{
+    display:grid;
+    grid-template-columns:repeat(12,1fr);
+    gap:8px;
+  }
+  @media(max-width:1100px){.pool{grid-template-columns:repeat(6,1fr);}}
+  @media(max-width:560px){.pool{grid-template-columns:repeat(3,1fr);}}
+  .grp-col{display:flex;flex-direction:column;gap:5px;}
+  .grp-col .grp-head{
+    font-size:11px;font-weight:700;color:var(--muted);text-align:center;
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:3px 0;
+  }
+  .chip{
+    display:flex;align-items:center;gap:5px;background:var(--panel);
+    border:1px solid var(--line);border-radius:8px;padding:5px 7px;cursor:grab;
+    font-size:12px;font-weight:600;user-select:none;transition:.12s;
+  }
+  .chip:hover{border-color:var(--accent);background:var(--panel2);}
+  .chip .flag{font-size:15px;flex:none;}
+  .chip .cname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+  .chip.used{opacity:.3;cursor:default;pointer-events:none;}
+  .chip.selected{outline:2px solid var(--accent);background:rgba(34,197,94,.16);}
+
+  /* Modal */
+  .overlay{
+    position:fixed;inset:0;background:rgba(3,7,15,.72);z-index:100;
+    display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;
+  }
+  .overlay.show{display:flex;}
+  .modal{
+    background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    width:100%;max-width:760px;padding:22px;
+  }
+  .modal h2{margin:0 0 4px;font-size:18px;}
+  .modal .muted{color:var(--muted);font-size:13px;margin:0 0 16px;}
+  .modal-close-row{display:flex;justify-content:flex-end;margin-top:18px;gap:8px;}
+  textarea.code{
+    width:100%;min-height:90px;background:var(--bg);color:var(--text);
+    border:1px solid var(--line);border-radius:10px;padding:10px;font-family:monospace;font-size:12px;resize:vertical;
+  }
+
+  /* Comparison */
+  .cmp-cards{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;}
+  @media(max-width:560px){.cmp-cards{grid-template-columns:1fr;}}
+  .cmp-card{border:1px solid var(--line);border-radius:14px;padding:16px;background:var(--panel2);}
+  .cmp-card h3{margin:0 0 10px;font-size:15px;display:flex;align-items:center;gap:8px;}
+  .cmp-card h3 .dot{width:11px;height:11px;border-radius:50%;}
+  .cmp-card.me h3 .dot{background:var(--me);}
+  .cmp-card.rival h3 .dot{background:var(--rival);}
+  .winrate{font-size:34px;font-weight:800;line-height:1;}
+  .winrate small{font-size:14px;color:var(--muted);font-weight:600;}
+  .cmp-stats{display:flex;gap:14px;margin-top:10px;font-size:13px;}
+  .cmp-stats .ok{color:var(--accent);font-weight:700;}
+  .cmp-stats .no{color:var(--danger);font-weight:700;}
+  .bar{height:8px;border-radius:6px;background:#0c1424;overflow:hidden;margin-top:12px;}
+  .bar > span{display:block;height:100%;}
+  .cmp-card.me .bar > span{background:var(--me);}
+  .cmp-card.rival .bar > span{background:var(--rival);}
+  .verdict{
+    text-align:center;font-size:15px;font-weight:700;padding:12px;border-radius:12px;
+    background:var(--panel2);border:1px solid var(--line);margin-bottom:18px;
+  }
+  table.breakdown{width:100%;border-collapse:collapse;font-size:13px;}
+  table.breakdown th,table.breakdown td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:center;}
+  table.breakdown th{color:var(--muted);font-weight:600;font-size:12px;}
+  table.breakdown td.round-label{text-align:left;font-weight:600;}
+  .toast{
+    position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--accent2);color:#fff;padding:11px 18px;border-radius:10px;font-weight:600;font-size:13px;
+    opacity:0;pointer-events:none;transition:.25s;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  input[type=file]{display:none;}
+</style>
+</head>
+<body>
+<header>
+  <div class="title-row">
+    <h1>⚽ 2026 북중미 월드컵 승부예측</h1>
+    <span class="sub">32강 토너먼트 대진표 · 친구와 승률 대결</span>
+    <span class="spacer"></span>
+    <div class="profiles" id="profiles">
+      <button class="profile-btn active" data-p="me"><span class="dot"></span><span class="pname">나</span></button>
+      <button class="profile-btn" data-p="rival"><span class="dot"></span><span class="pname">후배</span></button>
+      <button class="profile-btn" data-p="actual"><span class="dot"></span>실제결과</button>
+    </div>
+  </div>
+  <div class="toolbar">
+    <button class="btn" id="btnRename">✏️ 이름변경</button>
+    <button class="btn" id="btnAuto">🎲 32강 자동배치</button>
+    <button class="btn danger" id="btnReset">↺ 초기화</button>
+    <span class="spacer"></span>
+    <button class="btn primary" id="btnCompare">📊 승률 비교</button>
+    <button class="btn" id="btnShare">🔗 공유</button>
+    <button class="btn" id="btnImport">📥 가져오기</button>
+    <input type="file" id="fileInput" accept="application/json" />
+  </div>
+</header>
+
+<main>
+  <p class="editing-banner">현재 편집 중: <b id="editingName">나</b>의 예측 — 아래 국가를 드래그하거나, 칩을 클릭한 뒤 빈 칸을 눌러 32강에 배치하세요. 경기의 팀을 클릭하면 승자로 선택되어 다음 라운드로 진출합니다.</p>
+
+  <div class="bracket-wrap">
+    <div class="bracket" id="bracket"></div>
+  </div>
+
+  <section class="pool-section">
+    <div class="pool-head">
+      <h2>참여국 <span id="poolCount" style="color:var(--muted);font-weight:600;"></span></h2>
+      <span class="hint">드래그 또는 클릭 → 빈 칸 클릭</span>
+      <span class="spacer"></span>
+      <input class="search" id="poolSearch" placeholder="국가 검색 (한글/조)" />
+    </div>
+    <div class="pool" id="pool"></div>
+  </section>
+</main>
+
+<!-- Share modal -->
+<div class="overlay" id="shareModal">
+  <div class="modal">
+    <h2>🔗 예측 공유하기</h2>
+    <p class="muted">현재 편집 중인 프로필(<b id="shareProfileName"></b>)을 공유합니다. 배포된 주소라면 <b>링크</b> 하나로 바로 전달돼요. 친구가 링크를 열면 예측이 자동으로 불러와집니다.</p>
+    <label style="font-size:12px;color:var(--muted);font-weight:600;">공유 링크 (배포 주소에서 사용)</label>
+    <textarea class="code" id="shareLink" readonly style="min-height:54px;"></textarea>
+    <button class="btn primary" id="btnCopyLink" style="margin-top:6px;">🔗 링크 복사</button>
+    <label style="font-size:12px;color:var(--muted);font-weight:600;display:block;margin-top:14px;">공유 코드 (직접 붙여넣기용)</label>
+    <textarea class="code" id="shareCode" readonly></textarea>
+    <div class="modal-close-row">
+      <button class="btn" id="btnDownload">💾 파일로 저장</button>
+      <button class="btn" id="btnCopyCode">📋 코드 복사</button>
+      <button class="btn" data-close>닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import modal -->
+<div class="overlay" id="importModal">
+  <div class="modal">
+    <h2>📥 예측 가져오기</h2>
+    <p class="muted">친구에게 받은 공유 코드를 붙여넣고, 어느 프로필에 저장할지 선택하세요.</p>
+    <textarea class="code" id="importCode" placeholder="여기에 공유 코드를 붙여넣으세요..."></textarea>
+    <div style="margin-top:14px;">
+      <span style="font-size:13px;color:var(--muted);margin-right:8px;">저장 위치:</span>
+      <select id="importTarget" class="search">
+        <option value="rival">후배</option>
+        <option value="me">나</option>
+        <option value="actual">실제결과</option>
+      </select>
+      <button class="btn" id="btnImportFile" style="margin-left:8px;">📄 파일에서 불러오기</button>
+    </div>
+    <div class="modal-close-row">
+      <button class="btn primary" id="btnDoImport">불러오기</button>
+      <button class="btn" data-close>닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- Compare modal -->
+<div class="overlay" id="compareModal">
+  <div class="modal" style="max-width:820px;">
+    <h2>📊 승률 비교</h2>
+    <p class="muted">각자의 예측을 <b>실제결과</b>와 비교해 라운드별 적중 팀 수로 채점합니다. (실제결과를 입력해야 비교됩니다.)</p>
+    <div id="compareBody"></div>
+    <div class="modal-close-row">
+      <button class="btn" data-close>닫기</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
