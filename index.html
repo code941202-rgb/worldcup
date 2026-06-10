@@ -113,6 +113,31 @@
   .champion-box .name{font-size:16px;font-weight:800;}
   .champion-box .empty{color:var(--muted);font-size:12px;padding:4px 0;}
 
+  /* ===== 모바일: 칸이 좁아 글자가 뭉개지는 문제 해결 =====
+     가로 스크롤을 허용하고, 칸마다 최소 폭 + 국기 위/이름 아래 세로 배치 */
+  @media(max-width:760px){
+    .bracket-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+    .bracket{min-width:max-content;align-items:stretch;}
+    .round{align-items:center;}
+    .matches{gap:7px;flex-wrap:nowrap;width:auto;}
+    .match{flex:none;width:74px;max-width:none;border-radius:9px;}
+    .slot{
+      flex-direction:column;align-items:center;justify-content:center;
+      gap:2px;padding:6px 4px;min-height:52px;text-align:center;
+    }
+    .slot .flag{font-size:22px;width:auto;}
+    .slot .name{
+      font-size:11px;line-height:1.15;white-space:normal;
+      word-break:keep-all;overflow:visible;text-overflow:clip;flex:none;
+    }
+    .slot.empty .name{font-size:10px;}
+    .slot .rm{position:absolute;top:1px;right:2px;margin:0;font-size:10px;}
+    .champion-box{min-width:150px;padding:8px 16px;}
+    /* 참여국 칩: 긴 이름 줄바꿈 허용, 터치 영역 확대 */
+    .chip{padding:7px 8px;border-radius:9px;}
+    .chip .cname{white-space:normal;word-break:keep-all;line-height:1.15;overflow:visible;text-overflow:clip;}
+  }
+
   /* Pool - 조별 세로 컬럼 그리드 */
   .pool-section{margin-top:16px;border-top:1px solid var(--line);padding-top:12px;}
   .pool-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
