@@ -27,3 +27,32 @@
 - `index.html` — 화면 구조 및 스타일
 - `data.js` — 48개국 정보(한글명/국기/조)와 토너먼트 구조
 - `app.js` — 배치·승자선택·공유·채점 로직
+
+---
+
+## 🚀 배포 (GitHub → Vercel)
+
+### 1단계. GitHub에 새 저장소 만들기
+1. https://github.com/new 접속
+2. Repository name: `worldcup-prediction` (원하는 이름) 입력
+3. Public 또는 Private 선택 → **Create repository** 클릭
+4. 생성 후 나오는 저장소 주소(예: `https://github.com/내아이디/worldcup-prediction.git`)를 복사
+
+### 2단계. 로컬 코드 푸시 (터미널에서 실행)
+아래에서 `<주소>`를 1단계에서 복사한 주소로 바꿔 실행하세요.
+```
+git remote add origin <주소>
+git push -u origin main
+```
+
+### 3단계. Vercel에 연결
+1. https://vercel.com/new 접속 (GitHub 계정으로 로그인)
+2. **Import Git Repository**에서 방금 만든 `worldcup-prediction` 선택 → Import
+3. Framework Preset은 **Other**(정적 사이트) 그대로 두고 **Deploy** 클릭
+4. 1~2분 뒤 `https://worldcup-prediction-xxxx.vercel.app` 같은 주소가 생성됨
+
+### 4단계. 친구와 공유
+- 배포 주소를 후배에게 보내면 바로 접속 가능
+- 앱 안에서 `🔗 공유` → `🔗 링크 복사`로 만든 링크를 보내면, 친구가 링크를 열 때 예측이 자동으로 불러와집니다.
+
+> 이후 코드를 수정하면 `git add . && git commit -m "수정" && git push` 만 하면 Vercel이 자동으로 다시 배포합니다.
