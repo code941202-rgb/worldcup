@@ -26,41 +26,47 @@ function goHome() {
   history.replaceState(null, "", location.origin + location.pathname);
   document.getElementById("headerSub").textContent = "이벤트를 만들거나 참여 코드로 입장하세요";
   show("screenHome");
-  loadEventList();
+  if (!DB.configured()) { document.getElementById("setupWarn").classList.remove("hidden"); }
+  else document.getElementById("setupWarn").classList.add("hidden");
+  renderRecent();
 }
 
-/* ===================== 홈: 이벤트 목록 ===================== */
-async function loadEventList() {
-  const wrap = document.getElementById("eventList");
-  if (!DB.configured()) { document.getElementById("setupWarn").classList.remove("hidden"); wrap.innerHTML = ""; return; }
-  document.getElementById("setupWarn").classList.add("hidden");
-  wrap.innerHTML = `<p class="muted">불러오는 중…</p>`;
-  try {
-    const events = await DB.listEvents();
-    const filtered = events.filter(e => App.eventFilter === "all" || e.type === App.eventFilter);
-    if (!filtered.length) { wrap.innerHTML = `<p class="muted">아직 이벤트가 없어요. 아래에서 새로 만들어보세요.</p>`; return; }
-    wrap.innerHTML = filtered.map(e => {
-      const ico = e.type === "school" ? "🏫" : e.type === "staff" ? "🏢" : "🎯";
-      const typeLabel = e.type === "school" ? "학교" : e.type === "staff" ? "직원" : "기타";
-      const lock = e.final_locked ? `<span class="badge lock">최종마감</span>`
-        : e.r32_locked ? `<span class="badge lock">32강마감</span>`
-        : `<span class="badge open">진행중</span>`;
-      return `<div class="event-item" data-id="${e.id}">
-        <span class="ico">${ico}</span>
-        <div class="meta">
-          <div class="nm">${escapeHtml(e.name)}</div>
-          <div class="sub">코드 ${e.join_code} · ${typeLabel}</div>
-        </div>
-        <span class="badge ${e.type}">${typeLabel}</span>
-        ${lock}
-      </div>`;
-    }).join("");
-    wrap.querySelectorAll(".event-item").forEach(el => {
-      el.addEventListener("click", () => enterEvent(el.dataset.id));
-    });
-  } catch (e) {
-    wrap.innerHTML = `<p class="muted">목록을 불러오지 못했어요: ${escapeHtml(e.message)}</p>`;
-  }
+/* ----- 최근 입장 이벤트 (이 기기 localStorage) ----- */
+const RECENT_KEY = "wc2026-recent-events";
+function getRecent() {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch { return []; }
+}
+function addRecent(ev) {
+  let list = getRecent().filter(x => x.id !== ev.id);
+  list.unshift({ id: ev.id, name: ev.name, type: ev.type, code: ev.join_code });
+  list = list.slice(0, 8);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch {}
+}
+function removeRecent(id) {
+  const list = getRecent().filter(x => x.id !== id);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch {}
+  renderRecent();
+}
+function renderRecent() {
+  const wrap = document.getElementById("recentWrap");
+  const listEl = document.getElementById("recentList");
+  const list = getRecent();
+  if (!list.length) { wrap.classList.add("hidden"); return; }
+  wrap.classList.remove("hidden");
+  listEl.innerHTML = list.map(e => {
+    const ico = e.type === "school" ? "🏫" : e.type === "staff" ? "🏢" : "🎯";
+    const typeLabel = e.type === "school" ? "학교" : e.type === "staff" ? "직원" : "기타";
+    return `<div class="event-item" data-id="${e.id}">
+      <span class="ico">${ico}</span>
+      <div class="meta"><div class="nm">${escapeHtml(e.name)}</div>
+        <div class="sub">코드 ${e.code} · ${typeLabel}</div></div>
+      <button class="btn" data-forget="${e.id}" style="padding:4px 9px;font-size:12px;">✕</button>
+    </div>`;
+  }).join("");
+  listEl.querySelectorAll(".event-item").forEach(el => {
+    el.addEventListener("click", (ev) => { if (ev.target.dataset.forget !== undefined) return; enterEvent(el.dataset.id); });
+  });
+  listEl.querySelectorAll("[data-forget]").forEach(b => b.addEventListener("click", (ev) => { ev.stopPropagation(); removeRecent(b.dataset.forget); }));
 }
 
 /* ===================== 이벤트 입장 ===================== */
@@ -71,6 +77,7 @@ async function enterEvent(eventId) {
     App.event = ev;
     App.isAdmin = false; App.adminPin = null;
     App.playerName = null; App.bracket = CORE.emptyBracket(); App.myPredId = null;
+    addRecent(ev);
     history.replaceState(null, "", `${location.origin}${location.pathname}?e=${ev.id}`);
     renderEventHeader();
     switchTab("predict");
@@ -777,10 +784,7 @@ async function init() {
   document.getElementById("appTitle").addEventListener("click", goHome);
   document.getElementById("btnJoin").addEventListener("click", joinByCode);
   document.getElementById("btnCreateEvent").addEventListener("click", createEvent);
-  document.querySelectorAll("#eventFilter button").forEach(b => b.addEventListener("click", () => {
-    document.querySelectorAll("#eventFilter button").forEach(x => x.classList.remove("active"));
-    b.classList.add("active"); App.eventFilter = b.dataset.f; loadEventList();
-  }));
+  document.getElementById("joinCode").addEventListener("keydown", (e) => { if (e.key === "Enter") joinByCode(); });
 
   // 탭
   document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => switchTab(b.dataset.tab)));

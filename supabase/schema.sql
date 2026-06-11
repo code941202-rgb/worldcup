@@ -38,11 +38,28 @@ drop policy if exists pred_select on public.predictions;
 create policy pred_select on public.predictions for select using (true);
 
 -- ---------- 이벤트 공개 뷰 (admin_pin 노출 방지) ----------
+-- 보안: 전체 목록은 공개하지 않는다. 코드를 아는 사람만 RPC로 단건 조회.
 create or replace view public.event_list as
   select id, name, type, join_code, r32_locked, final_locked, actual, created_at
   from public.events;
 
-grant select on public.event_list to anon, authenticated;
+revoke all on public.event_list from anon, authenticated;
+
+-- 코드로 이벤트 단건 조회 (참여용)
+create or replace function public.get_event_by_code(p_code text)
+returns public.event_list
+language sql security definer set search_path = public as $$
+  select id, name, type, join_code, r32_locked, final_locked, actual, created_at
+  from public.events where join_code = upper(p_code) limit 1;
+$$;
+
+-- id로 이벤트 단건 조회 (링크 입장용)
+create or replace function public.get_event(p_event uuid)
+returns public.event_list
+language sql security definer set search_path = public as $$
+  select id, name, type, join_code, r32_locked, final_locked, actual, created_at
+  from public.events where id = p_event limit 1;
+$$;
 
 -- =========================================================
 -- RPC 함수 (SECURITY DEFINER: RLS 우회, 서버에서 검증)
@@ -151,6 +168,8 @@ end; $$;
 
 grant execute on function
   public.create_event(text,text,text),
+  public.get_event_by_code(text),
+  public.get_event(uuid),
   public.upsert_prediction(uuid,text,jsonb),
   public.admin_verify(uuid,text),
   public.admin_set_lock(uuid,text,text,boolean),

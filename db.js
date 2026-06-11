@@ -64,16 +64,13 @@ const DB = (() => {
     async createEvent(name, type, pin) {
       return rpc("create_event", { p_name: name, p_type: type, p_pin: pin });
     },
-    async listEvents() {
-      return select("event_list?select=*&order=created_at.desc");
-    },
     async getEvent(id) {
-      const rows = await select(`event_list?id=eq.${id}&select=*`);
-      return rows[0] || null;
+      const r = await rpc("get_event", { p_event: id });
+      return r && r.id ? r : null;
     },
     async getEventByCode(code) {
-      const rows = await select(`event_list?join_code=eq.${encodeURIComponent(code)}&select=*`);
-      return rows[0] || null;
+      const r = await rpc("get_event_by_code", { p_code: code });
+      return r && r.id ? r : null;
     },
 
     // ----- 예측 -----
