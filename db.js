@@ -51,6 +51,7 @@ const DB = (() => {
         LOCKED_FINAL: "이미 최종 마감되어 제출할 수 없습니다.",
         LOCKED_R32_NEW: "32강이 마감되어 신규 참가가 불가합니다.",
         BAD_PIN: "관리자 PIN이 올바르지 않습니다.",
+        BAD_MASTER: "마스터 비밀번호가 올바르지 않습니다.",
       };
       for (const k in map) if (String(m).includes(k)) return map[k];
       return m;
@@ -101,6 +102,14 @@ const DB = (() => {
     },
     async adminDeleteEvent(eventId, pin) {
       return rpc("admin_delete_event", { p_event: eventId, p_pin: pin });
+    },
+
+    // ----- 마스터 관리자 -----
+    async masterVerify(master) {
+      return rpc("master_verify", { p_master: master });
+    },
+    async masterListEvents(master) {
+      return rpc("master_list_events", { p_master: master });
     },
   };
 })();

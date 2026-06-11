@@ -329,6 +329,7 @@
     <h1 id="appTitle" style="cursor:pointer;">⚽ 2026 북중미 월드컵 승부예측</h1>
     <span class="sub" id="headerSub">이벤트를 만들거나 참여 코드로 입장하세요</span>
     <span class="spacer"></span>
+    <button class="btn" id="btnMaster">🛡️ 관리자</button>
     <button class="btn" id="btnHome">🏠 홈</button>
   </div>
 </header>
@@ -499,6 +500,34 @@
           <h2>👥 제출 현황 <span id="adminCount" style="color:var(--muted);font-weight:600;"></span></h2>
           <div id="adminPredList"></div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 마스터 관리자 화면 ============ -->
+  <div id="screenMaster" class="screen hidden">
+    <div id="masterLoginCard" class="card">
+      <h2>🛡️ 마스터 관리자</h2>
+      <p class="muted">마스터 비밀번호를 입력하면 내가 만든 <b>모든 이벤트</b>를 보고, 어디든 관리자 권한으로 바로 들어갈 수 있어요.</p>
+      <div class="row-2">
+        <div class="field"><input class="input" id="masterPin" type="password" placeholder="마스터 비밀번호" /></div>
+        <div class="field" style="display:flex;align-items:flex-end;">
+          <button class="btn primary" id="btnMasterLogin" style="width:100%;">로그인</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="masterPanel" class="hidden">
+      <div class="card" style="padding:14px 18px;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <h2 style="margin:0;">🛡️ 전체 이벤트 관리</h2>
+          <span class="spacer"></span>
+          <input class="input" id="masterSearch" placeholder="이벤트 검색" style="width:auto;" />
+          <button class="btn" id="btnMasterRefresh">↻ 새로고침</button>
+        </div>
+      </div>
+      <div class="card">
+        <div id="masterEventList"></div>
       </div>
     </div>
   </div>

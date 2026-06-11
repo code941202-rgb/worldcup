@@ -19,7 +19,7 @@ let App = {
 
 /* ===================== 화면 전환 ===================== */
 function show(id) {
-  ["screenHome", "screenEvent"].forEach(s => document.getElementById(s).classList.toggle("hidden", s !== id));
+  ["screenHome", "screenEvent", "screenMaster"].forEach(s => document.getElementById(s).classList.toggle("hidden", s !== id));
 }
 function goHome() {
   App.event = null; App.isAdmin = false; App.adminPin = null; App.playerName = null;
@@ -752,6 +752,79 @@ async function adminDeleteEvent() {
   } catch (e) { toast(e.message); }
 }
 
+/* ===================== 마스터 관리자 ===================== */
+let masterPin = null;
+let masterEvents = [];
+
+function openMaster() {
+  if (!DB.configured()) { toast("Supabase 설정이 필요해요."); return; }
+  show("screenMaster");
+  document.getElementById("headerSub").textContent = "마스터 관리자";
+  if (masterPin) { document.getElementById("masterLoginCard").classList.add("hidden"); document.getElementById("masterPanel").classList.remove("hidden"); loadMasterEvents(); }
+  else { document.getElementById("masterLoginCard").classList.remove("hidden"); document.getElementById("masterPanel").classList.add("hidden"); document.getElementById("masterPin").value = ""; }
+}
+
+async function masterLogin() {
+  const pin = document.getElementById("masterPin").value.trim();
+  if (!pin) { toast("마스터 비밀번호를 입력하세요."); return; }
+  try {
+    const ok = await DB.masterVerify(pin);
+    if (!ok) { toast("마스터 비밀번호가 올바르지 않아요."); return; }
+    masterPin = pin;
+    document.getElementById("masterLoginCard").classList.add("hidden");
+    document.getElementById("masterPanel").classList.remove("hidden");
+    await loadMasterEvents();
+    toast("마스터 로그인 완료");
+  } catch (e) { toast(e.message); }
+}
+
+async function loadMasterEvents() {
+  const listEl = document.getElementById("masterEventList");
+  listEl.innerHTML = `<p class="muted">불러오는 중…</p>`;
+  try {
+    masterEvents = await DB.masterListEvents(masterPin) || [];
+    renderMasterEvents();
+  } catch (e) { listEl.innerHTML = `<p class="muted">불러오지 못했어요: ${escapeHtml(e.message)}</p>`; }
+}
+
+function renderMasterEvents() {
+  const listEl = document.getElementById("masterEventList");
+  const q = (document.getElementById("masterSearch").value || "").trim().toLowerCase();
+  let list = masterEvents;
+  if (q) list = list.filter(e => e.name.toLowerCase().includes(q) || (e.join_code || "").toLowerCase().includes(q));
+  if (!list.length) { listEl.innerHTML = `<p class="muted">${masterEvents.length ? "검색 결과가 없어요." : "아직 만든 이벤트가 없어요."}</p>`; return; }
+  listEl.innerHTML = list.map(e => {
+    const ico = e.type === "school" ? "🏫" : e.type === "staff" ? "🏢" : "🎯";
+    const typeLabel = e.type === "school" ? "학교" : e.type === "staff" ? "직원" : "기타";
+    const lock = e.final_locked ? `<span class="badge lock">최종마감</span>`
+      : e.r32_locked ? `<span class="badge lock">32강마감</span>` : `<span class="badge open">진행중</span>`;
+    const actual = e.actual ? `<span class="badge open">결과입력</span>` : "";
+    return `<div class="event-item" data-id="${e.id}">
+      <span class="ico">${ico}</span>
+      <div class="meta">
+        <div class="nm">${escapeHtml(e.name)} <span class="badge ${e.type}">${typeLabel}</span></div>
+        <div class="sub">코드 ${e.join_code} · PIN ${escapeHtml(e.admin_pin)} · 참가 ${e.pred_count}명</div>
+      </div>
+      ${lock} ${actual}
+    </div>`;
+  }).join("");
+  listEl.querySelectorAll(".event-item").forEach(el => {
+    const id = el.dataset.id;
+    const ev = masterEvents.find(x => x.id === id);
+    el.addEventListener("click", () => enterEventAsAdmin(ev));
+  });
+}
+
+// 마스터가 클릭 → 그 이벤트에 관리자 권한으로 바로 입장
+async function enterEventAsAdmin(ev) {
+  await enterEvent(ev.id);
+  App.isAdmin = true;
+  App.adminPin = ev.admin_pin;
+  document.getElementById("adminLoginCard").classList.add("hidden");
+  document.getElementById("adminPanel").classList.remove("hidden");
+  switchTab("admin");
+}
+
 /* ===================== 공유 ===================== */
 function openShareEvent() {
   const url = `${location.origin}${location.pathname}?e=${App.event.id}`;
@@ -781,6 +854,7 @@ function handleSubmit() {
 async function init() {
   // 홈
   document.getElementById("btnHome").addEventListener("click", goHome);
+  document.getElementById("btnMaster").addEventListener("click", openMaster);
   document.getElementById("appTitle").addEventListener("click", goHome);
   document.getElementById("btnJoin").addEventListener("click", joinByCode);
   document.getElementById("btnCreateEvent").addEventListener("click", createEvent);
@@ -808,6 +882,12 @@ async function init() {
   document.getElementById("rankMode").addEventListener("change", renderRanking);
   document.getElementById("onlyChamp").addEventListener("change", renderRanking);
   document.getElementById("rankSearch").addEventListener("input", renderRanking);
+
+  // 마스터 관리자
+  document.getElementById("btnMasterLogin").addEventListener("click", masterLogin);
+  document.getElementById("masterPin").addEventListener("keydown", (e) => { if (e.key === "Enter") masterLogin(); });
+  document.getElementById("masterSearch").addEventListener("input", renderMasterEvents);
+  document.getElementById("btnMasterRefresh").addEventListener("click", loadMasterEvents);
 
   // 공유
   document.getElementById("btnShareEvent").addEventListener("click", openShareEvent);
