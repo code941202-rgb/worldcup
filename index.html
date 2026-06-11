@@ -358,30 +358,6 @@
         <div id="recentList"></div>
       </div>
     </div>
-
-    <div class="card">
-      <h2>➕ 새 이벤트 만들기 (관리자)</h2>
-      <p class="muted">이벤트를 만들면 참여 코드가 생성됩니다. 관리자 PIN은 마감·결과입력에 필요하니 꼭 기억하세요.</p>
-      <div class="field">
-        <label>이벤트 이름</label>
-        <input class="input" id="newEventName" placeholder="예: 재활치료팀 월드컵 예측" />
-      </div>
-      <div class="row-2">
-        <div class="field">
-          <label>분류</label>
-          <select class="input" id="newEventType">
-            <option value="school">학교 (후배들)</option>
-            <option value="staff">직원 이벤트</option>
-            <option value="etc">기타</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>관리자 PIN (4자리 이상)</label>
-          <input class="input" id="newEventPin" placeholder="예: 1234" />
-        </div>
-      </div>
-      <button class="btn primary" id="btnCreateEvent">이벤트 생성</button>
-    </div>
   </div>
 
   <!-- ============ 이벤트 화면 ============ -->
@@ -518,6 +494,30 @@
     </div>
 
     <div id="masterPanel" class="hidden">
+      <div class="card">
+        <h2>➕ 새 이벤트 만들기</h2>
+        <p class="muted">이벤트를 만들면 참여 코드가 생성됩니다. 관리자 PIN은 마감·결과입력에 필요하니 꼭 기억하세요.</p>
+        <div class="field">
+          <label>이벤트 이름</label>
+          <input class="input" id="newEventName" placeholder="예: 재활치료팀 월드컵 예측" />
+        </div>
+        <div class="row-2">
+          <div class="field">
+            <label>분류</label>
+            <select class="input" id="newEventType">
+              <option value="school">학교 (후배들)</option>
+              <option value="staff">직원 이벤트</option>
+              <option value="etc">기타</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>관리자 PIN (4자리 이상)</label>
+            <input class="input" id="newEventPin" placeholder="예: 1234" />
+          </div>
+        </div>
+        <button class="btn primary" id="btnCreateEvent">이벤트 생성</button>
+      </div>
+
       <div class="card" style="padding:14px 18px;">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
           <h2 style="margin:0;">🛡️ 전체 이벤트 관리</h2>

@@ -131,12 +131,17 @@ async function createEvent() {
   try {
     const ev = await DB.createEvent(name, type, pin);
     toast(`이벤트 생성! 참여코드: ${ev.join_code}`);
-    // 생성자는 바로 관리자로 입장
-    App.adminPin = pin;
+    // 입력칸 비우기
+    document.getElementById("newEventName").value = "";
+    document.getElementById("newEventPin").value = "";
+    // 마스터 목록 갱신 (가능하면)
+    if (masterPin) { await loadMasterEvents(); }
+    // 생성한 이벤트로 바로 관리자 입장 + 공유창
     await enterEvent(ev.id);
-    App.isAdmin = true;
+    App.isAdmin = true; App.adminPin = pin;
     document.getElementById("adminLoginCard").classList.add("hidden");
     document.getElementById("adminPanel").classList.remove("hidden");
+    switchTab("admin");
     openShareEvent();
   } catch (e) { toast(e.message); }
 }
