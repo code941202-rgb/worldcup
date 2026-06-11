@@ -102,5 +102,8 @@ const DB = (() => {
     async adminDeletePrediction(eventId, pin, predId) {
       return rpc("admin_delete_prediction", { p_event: eventId, p_pin: pin, p_pred: predId });
     },
+    async adminDeleteEvent(eventId, pin) {
+      return rpc("admin_delete_event", { p_event: eventId, p_pin: pin });
+    },
   };
 })();

@@ -140,11 +140,21 @@ begin
   delete from public.predictions where id = p_pred and event_id = p_event;
 end; $$;
 
+-- 관리자: 이벤트 전체 삭제 (예측도 함께 삭제됨)
+create or replace function public.admin_delete_event(p_event uuid, p_pin text)
+returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.admin_verify(p_event, p_pin) then raise exception 'BAD_PIN'; end if;
+  delete from public.events where id = p_event;
+end; $$;
+
 grant execute on function
   public.create_event(text,text,text),
   public.upsert_prediction(uuid,text,jsonb),
   public.admin_verify(uuid,text),
   public.admin_set_lock(uuid,text,text,boolean),
   public.admin_set_actual(uuid,text,jsonb),
-  public.admin_delete_prediction(uuid,text,uuid)
+  public.admin_delete_prediction(uuid,text,uuid),
+  public.admin_delete_event(uuid,text)
 to anon, authenticated;

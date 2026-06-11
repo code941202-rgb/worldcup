@@ -698,6 +698,15 @@ async function adminDelete(predId) {
   } catch (e) { toast(e.message); }
 }
 
+async function adminDeleteEvent() {
+  if (!confirm(`이벤트 '${App.event.name}'와 모든 예측을 영구 삭제할까요? 되돌릴 수 없어요.`)) return;
+  try {
+    await DB.adminDeleteEvent(App.event.id, App.adminPin);
+    toast("이벤트를 삭제했어요.");
+    goHome();
+  } catch (e) { toast(e.message); }
+}
+
 /* ===================== 공유 ===================== */
 function openShareEvent() {
   const url = `${location.origin}${location.pathname}?e=${App.event.id}`;
@@ -751,6 +760,7 @@ async function init() {
   document.getElementById("btnLockFinal").addEventListener("click", () => toggleLock("final"));
   document.getElementById("btnEditActual").addEventListener("click", editActual);
   document.getElementById("btnRefreshAdmin").addEventListener("click", renderAdminPanel);
+  document.getElementById("btnDeleteEvent").addEventListener("click", adminDeleteEvent);
 
   // 순위 필터
   document.getElementById("rankMode").addEventListener("change", renderRanking);
