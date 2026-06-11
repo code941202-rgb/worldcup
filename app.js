@@ -200,6 +200,7 @@ function placeSeed(slotIndex, teamId) {
   const ex = b.r32.indexOf(teamId);
   if (ex !== -1 && ex !== slotIndex) b.r32[ex] = null;
   b.r32[slotIndex] = teamId;
+  App.selectedChip = null;
   CORE.validate(b); renderBracket(); renderPool();
 }
 function removeSeed(slotIndex) {
@@ -333,6 +334,25 @@ function renderBracket() {
   const wrap = document.getElementById("bracket");
   wrap.innerHTML = buildBracketHTML(App.bracket, { interactive: true });
   attachBracketEvents(wrap);
+  highlightEligible();
+}
+
+// 선택된 칩이 들어갈 수 있는 빈 32강 칸을 형광 강조
+function highlightEligible() {
+  const wrap = document.getElementById("bracket");
+  if (!wrap) return;
+  wrap.classList.remove("picking");
+  wrap.querySelectorAll(".slot.eligible").forEach(s => s.classList.remove("eligible"));
+  if (!App.selectedChip || !r32Editable()) return;
+  const team = TEAM_MAP[App.selectedChip];
+  if (!team) return;
+  let any = false;
+  wrap.querySelectorAll('.slot.empty[data-round="r32"]').forEach(slot => {
+    const idx = parseInt(slot.dataset.idx, 10);
+    const def = SLOTS[idx];
+    if (def && def.groups.includes(team.group)) { slot.classList.add("eligible"); any = true; }
+  });
+  if (any) wrap.classList.add("picking");
 }
 
 function attachBracketEvents(wrap) {
@@ -386,7 +406,8 @@ function renderPool() {
     chip.addEventListener("click", () => {
       App.selectedChip = (App.selectedChip === id) ? null : id;
       renderPool();
-      toast(App.selectedChip ? `${TEAM_MAP[id].name} 선택됨 — 빈 칸을 클릭하세요` : "선택 해제");
+      highlightEligible();
+      toast(App.selectedChip ? `${TEAM_MAP[id].name} 선택됨 — 형광색 칸을 누르세요` : "선택 해제");
     });
   });
 }
@@ -589,6 +610,23 @@ function renderBracketActual() {
   const wrap = document.getElementById("bracket");
   wrap.innerHTML = buildBracketActualHTML(App.bracket);
   attachBracketEventsActual(wrap);
+  highlightEligibleActual();
+}
+function highlightEligibleActual() {
+  const wrap = document.getElementById("bracket");
+  if (!wrap) return;
+  wrap.classList.remove("picking");
+  wrap.querySelectorAll(".slot.eligible").forEach(s => s.classList.remove("eligible"));
+  if (!App.selectedChip) return;
+  const team = TEAM_MAP[App.selectedChip];
+  if (!team) return;
+  let any = false;
+  wrap.querySelectorAll('.slot.empty[data-round="r32"]').forEach(slot => {
+    const idx = parseInt(slot.dataset.idx, 10);
+    const def = SLOTS[idx];
+    if (def && def.groups.includes(team.group)) { slot.classList.add("eligible"); any = true; }
+  });
+  if (any) wrap.classList.add("picking");
 }
 function buildBracketActualHTML(b) {
   // r32 항상 배치 가능
@@ -642,7 +680,7 @@ function placeSeedActual(slotIndex, teamId) {
   if (slot) { const t = TEAM_MAP[teamId]; if (!slot.groups.includes(t.group)) { toast(`이 자리는 '${slot.label}' 자리예요.`); return; } }
   const b = App.bracket;
   const ex = b.r32.indexOf(teamId); if (ex !== -1 && ex !== slotIndex) b.r32[ex] = null;
-  b.r32[slotIndex] = teamId; CORE.validate(b); renderBracketActual(); renderPoolActual();
+  b.r32[slotIndex] = teamId; App.selectedChip = null; CORE.validate(b); renderBracketActual(); renderPoolActual();
 }
 function pickWinnerActual(roundKey, slotIndex) {
   const b = App.bracket; const team = b[roundKey][slotIndex]; if (!team) return;
@@ -674,7 +712,7 @@ function renderPoolActual() {
   poolEl.querySelectorAll(".chip").forEach(chip => {
     const id = chip.dataset.team; if (chip.classList.contains("used")) return;
     chip.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/plain", id); });
-    chip.addEventListener("click", () => { App.selectedChip = (App.selectedChip === id) ? null : id; renderPoolActual(); });
+    chip.addEventListener("click", () => { App.selectedChip = (App.selectedChip === id) ? null : id; renderPoolActual(); highlightEligibleActual(); });
   });
 }
 async function saveActual() {

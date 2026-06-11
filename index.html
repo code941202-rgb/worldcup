@@ -103,6 +103,24 @@
   .slot.winner{border-left-color:var(--accent);background:rgba(34,197,94,.10);}
   .slot.winner .name{color:#bbf7d0;}
   .slot.loser{opacity:.42;}
+  /* 선택된 칩이 들어갈 수 있는 빈 칸: 형광 강조 + 펄스 */
+  .slot.eligible{
+    background:rgba(34,197,94,.18) !important;
+    border-left-color:var(--accent) !important;
+    box-shadow:0 0 0 2px rgba(34,197,94,.55), 0 0 12px rgba(34,197,94,.6);
+    border-radius:5px;
+    animation:elig 1s ease-in-out infinite;
+    cursor:pointer !important;
+  }
+  .slot.eligible .slotlabel{color:#bbf7d0 !important;}
+  .slot.eligible .flag{color:#bbf7d0;}
+  @keyframes elig{
+    0%,100%{box-shadow:0 0 0 2px rgba(34,197,94,.45), 0 0 8px rgba(34,197,94,.45);}
+    50%{box-shadow:0 0 0 2px rgba(34,197,94,.9), 0 0 16px rgba(34,197,94,.85);}
+  }
+  /* 칩 선택 중일 때 그 외 칸은 살짝 흐리게 */
+  .bracket.picking .match{opacity:.55;transition:opacity .15s;}
+  .bracket.picking .match:has(.slot.eligible){opacity:1;}
   .slot .rm{
     margin-left:auto;border:0;background:transparent;color:var(--muted);
     cursor:pointer;font-size:11px;padding:0 2px;border-radius:5px;flex:none;
