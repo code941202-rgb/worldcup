@@ -84,6 +84,12 @@
     background:var(--panel);border:1px solid var(--line);border-radius:7px;
     overflow:hidden;flex:1 1 0;min-width:0;max-width:120px;
   }
+  .mtime{
+    font-size:9.5px;color:var(--muted);text-align:center;padding:2px 3px;
+    background:var(--panel2);border-bottom:1px solid var(--line);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .slot .slotlabel{font-size:10px;color:var(--muted);font-weight:600;}
   .slot{
     display:flex;align-items:center;gap:3px;padding:3px 5px;cursor:pointer;
     border-left:3px solid transparent;min-height:26px;position:relative;transition:.12s;
@@ -120,7 +126,8 @@
     .bracket{min-width:max-content;align-items:stretch;}
     .round{align-items:center;}
     .matches{gap:7px;flex-wrap:nowrap;width:auto;}
-    .match{flex:none;width:74px;max-width:none;border-radius:9px;}
+    .match{flex:none;width:84px;max-width:none;border-radius:9px;}
+    .mtime{font-size:9px;padding:2px;}
     .slot{
       flex-direction:column;align-items:center;justify-content:center;
       gap:2px;padding:6px 4px;min-height:52px;text-align:center;
@@ -247,7 +254,7 @@
 </header>
 
 <main>
-  <p class="editing-banner">현재 편집 중: <b id="editingName">나</b>의 예측 — 아래 국가를 드래그하거나, 칩을 클릭한 뒤 빈 칸을 눌러 32강에 배치하세요. 경기의 팀을 클릭하면 승자로 선택되어 다음 라운드로 진출합니다.</p>
+  <p class="editing-banner">현재 편집 중: <b id="editingName">나</b>의 예측 — 32강 각 칸에는 들어갈 수 있는 자리(예: "E조 1위", "3위 A/B/C/D/F")가 정해져 있어요. 아래 국가를 드래그하거나 칩 클릭 후 맞는 칸을 누르면 배치됩니다. 경기 팀을 클릭하면 승자로 선택돼 다음 라운드로 올라가요. 각 경기 위에는 한국시간 일정이 표시됩니다.</p>
 
   <div class="bracket-wrap">
     <div class="bracket" id="bracket"></div>

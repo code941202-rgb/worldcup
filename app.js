@@ -85,6 +85,15 @@ function cur() { return state.profiles[state.current]; }
 
 function placeSeed(slotIndex, teamId) {
   const p = cur();
+  // 슬롯 자리 제약 검증
+  const slot = (typeof SLOTS !== "undefined") ? SLOTS[slotIndex] : null;
+  if (slot) {
+    const t = TEAM_MAP[teamId];
+    if (!slot.groups.includes(t.group)) {
+      toast(`이 자리는 '${slot.label}' 자리예요. ${t.group}조 팀은 올 수 없어요.`);
+      return;
+    }
+  }
   // 이미 다른 칸에 있으면 제거 (중복 방지)
   const existing = p.r32.indexOf(teamId);
   if (existing !== -1 && existing !== slotIndex) p.r32[existing] = null;
@@ -116,34 +125,41 @@ function pickWinner(roundKey, slotIndex) {
   save(); render();
 }
 
-/* ---------- 자동 32강 배치 ---------- */
+/* ---------- 자동 32강 배치 (실제 대진 구조 기준) ----------
+   각 슬롯의 자리(1위/2위/3위 후보 조)에 맞춰 팀을 채운다.
+   3위 자리는 8개이며, 후보 조의 3위 팀들을 겹치지 않게 배정한다. */
 function autoFill() {
   const p = cur();
-  const pos1 = TEAMS.filter(t => t.pos === 1).map(t => t.id);          // 12
-  const pos2 = TEAMS.filter(t => t.pos === 2).map(t => t.id);          // 12
-  const pos3 = TEAMS.filter(t => t.pos === 3).slice(0, 8).map(t => t.id); // 8 (A~H 3위)
-  let pool = [...pos1, ...pos2, ...pos3]; // 32
-  shuffle(pool);
-  // 같은 조 인접(경기 내) 방지
-  for (let i = 0; i < pool.length; i += 2) {
-    if (sameGroup(pool[i], pool[i + 1])) {
-      for (let j = 0; j < pool.length; j++) {
-        if (j !== i && j !== i + 1 && !sameGroup(pool[i], pool[j]) &&
-            !sameGroup(pool[j === pool.length - 1 ? j - 1 : (j % 2 === 0 ? j + 1 : j - 1)], pool[i + 1])) {
-          [pool[i + 1], pool[j]] = [pool[j], pool[i + 1]];
-          break;
-        }
-      }
-    }
-  }
-  p.r32 = pool.slice(0, 32);
+  const r32 = new Array(32).fill(null);
+  const usedThirds = new Set();
+
+  // 1·2위 자리 먼저 채우기
+  SLOTS.forEach((slot, idx) => {
+    if (slot.third) return;
+    const g = slot.groups[0];
+    const pos = slot.label.includes("1위") ? 1 : 2;
+    const team = TEAMS.find(t => t.group === g && t.pos === pos);
+    if (team) r32[idx] = team.id;
+  });
+
+  // 3위 자리 채우기: 후보 조 중 아직 안 쓴 조의 3위 팀 배정
+  SLOTS.forEach((slot, idx) => {
+    if (!slot.third) return;
+    const candGroups = slot.groups.filter(g => !usedThirds.has(g));
+    const pick = candGroups[Math.floor(Math.random() * candGroups.length)] || slot.groups[0];
+    usedThirds.add(pick);
+    const team = TEAMS.find(t => t.group === pick && t.pos === 3);
+    if (team) r32[idx] = team.id;
+  });
+
+  p.r32 = r32;
   p.r16 = new Array(16).fill(null);
   p.r8 = new Array(8).fill(null);
   p.r4 = new Array(4).fill(null);
   p.r2 = new Array(2).fill(null);
   p.champion = null;
   save(); render();
-  toast("32강을 자동 배치했어요. 경기 승자를 클릭해 진행하세요.");
+  toast("실제 대진 구조로 32강을 자동 배치했어요. 경기 승자를 클릭해 진행하세요.");
 }
 function sameGroup(a, b) {
   if (!a || !b) return false;
@@ -175,8 +191,10 @@ function renderProfilesUI() {
 
 function slotHTML(roundKey, idx, teamId, winnerOfMatch, placeable) {
   if (!teamId) {
+    let label = placeable ? "빈칸" : "—";
+    if (placeable && typeof SLOTS !== "undefined" && SLOTS[idx]) label = SLOTS[idx].label;
     return `<div class="slot empty" data-round="${roundKey}" data-idx="${idx}" data-placeable="${placeable ? 1 : 0}">
-      <span class="flag">+</span><span class="name">${placeable ? "빈칸" : "—"}</span></div>`;
+      <span class="flag">+</span><span class="name slotlabel">${label}</span></div>`;
   }
   const t = TEAM_MAP[teamId];
   let cls = "slot";
@@ -188,6 +206,18 @@ function slotHTML(roundKey, idx, teamId, winnerOfMatch, placeable) {
     <span class="name">${t.name}</span>
     ${rmBtn}
   </div>`;
+}
+
+// 라운드/경기 인덱스로 경기 시간·장소 정보 반환
+function matchInfo(roundKey, matchIndex) {
+  if (roundKey === "r32" && typeof R32_MATCHES !== "undefined") {
+    const m = R32_MATCHES[matchIndex];
+    return m ? { kst: m.kst, venue: m.venue, no: m.no } : null;
+  }
+  if (typeof ROUND_TIMES !== "undefined" && ROUND_TIMES[roundKey]) {
+    return { kst: ROUND_TIMES[roundKey][matchIndex], venue: (ROUND_VENUES[roundKey] || [])[matchIndex] };
+  }
+  return null;
 }
 
 function renderBracket() {
@@ -207,7 +237,7 @@ function renderBracket() {
   }
   html += `</div></div>`;
 
-  // 라운드 행: 위에서부터 결승 → ... → 32강 순으로 출력 (CSS 없이도 위→아래로 좁→넓)
+  // 라운드 행: 위에서부터 결승 → ... → 32강 순으로 출력
   for (let rIdx = ROUNDS.length - 1; rIdx >= 0; rIdx--) {
     const round = ROUNDS[rIdx];
     const arr = p[round.key];
@@ -219,7 +249,12 @@ function renderBracket() {
       let winner = null;
       if (round.key === "r2") winner = p.champion;
       else if (nextArr) winner = nextArr[m];
+      const info = matchInfo(round.key, m);
+      const timeHTML = info && info.kst
+        ? `<div class="mtime">🕐 ${info.kst}${info.venue ? " · " + info.venue : ""}</div>`
+        : "";
       html += `<div class="match">`;
+      html += timeHTML;
       html += slotHTML(round.key, s0, arr[s0], winner, placeable);
       html += slotHTML(round.key, s1, arr[s1], winner, placeable);
       html += `</div>`;
