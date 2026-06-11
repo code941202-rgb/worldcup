@@ -1,139 +1,231 @@
 /* =========================================================
-   2026 월드컵 승부예측 - 앱 로직
+   2026 월드컵 승부예측 - 멀티유저 앱 (Supabase 연동)
    ========================================================= */
 
-const STORAGE_KEY = "wc2026-prediction-v1";
+const ORDER = CORE.ORDER;
 
-/* ---------- 상태 ---------- */
-function emptyProfile(name) {
-  return {
-    name,
-    r32: new Array(32).fill(null), // 사용자가 배치하는 시드
-    r16: new Array(16).fill(null), // 각 경기 승자
-    r8:  new Array(8).fill(null),
-    r4:  new Array(4).fill(null),
-    r2:  new Array(2).fill(null),
-    champion: null,
-  };
-}
-
-let state = {
-  current: "me",
-  profiles: {
-    me: emptyProfile(PROFILE_DEFAULT_NAMES.me),
-    rival: emptyProfile(PROFILE_DEFAULT_NAMES.rival),
-    actual: emptyProfile(PROFILE_DEFAULT_NAMES.actual),
-  },
+// 현재 세션 상태
+let App = {
+  event: null,        // 현재 이벤트 (event_list row)
+  isAdmin: false,
+  adminPin: null,
+  playerName: null,   // 참가자 이름
+  bracket: CORE.emptyBracket(), // 편집 중인 내 예측
+  myPredId: null,
+  predictions: [],    // 이벤트 전체 예측 (순위/관리자용)
+  eventFilter: "all",
+  selectedChip: null,
 };
 
-let selectedChip = null; // 클릭 배치용으로 선택된 팀 id
-
-/* ---------- 저장 / 로드 ---------- */
-function save() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+/* ===================== 화면 전환 ===================== */
+function show(id) {
+  ["screenHome", "screenEvent"].forEach(s => document.getElementById(s).classList.toggle("hidden", s !== id));
 }
-function load() {
+function goHome() {
+  App.event = null; App.isAdmin = false; App.adminPin = null; App.playerName = null;
+  history.replaceState(null, "", location.origin + location.pathname);
+  document.getElementById("headerSub").textContent = "이벤트를 만들거나 참여 코드로 입장하세요";
+  show("screenHome");
+  loadEventList();
+}
+
+/* ===================== 홈: 이벤트 목록 ===================== */
+async function loadEventList() {
+  const wrap = document.getElementById("eventList");
+  if (!DB.configured()) { document.getElementById("setupWarn").classList.remove("hidden"); wrap.innerHTML = ""; return; }
+  document.getElementById("setupWarn").classList.add("hidden");
+  wrap.innerHTML = `<p class="muted">불러오는 중…</p>`;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    const parsed = JSON.parse(raw);
-    if (parsed && parsed.profiles) {
-      // 안전 병합
-      ["me", "rival", "actual"].forEach(k => {
-        const p = parsed.profiles[k];
-        if (p) state.profiles[k] = normalizeProfile(p, PROFILE_DEFAULT_NAMES[k]);
-      });
-      if (parsed.current) state.current = parsed.current;
-    }
-  } catch (e) {}
-}
-function normalizeProfile(p, fallbackName) {
-  const np = emptyProfile(p.name || fallbackName);
-  const copyArr = (src, dst) => {
-    if (Array.isArray(src)) for (let i = 0; i < dst.length; i++) dst[i] = src[i] ?? null;
-  };
-  copyArr(p.r32, np.r32);
-  copyArr(p.r16, np.r16);
-  copyArr(p.r8, np.r8);
-  copyArr(p.r4, np.r4);
-  copyArr(p.r2, np.r2);
-  np.champion = p.champion ?? null;
-  return np;
-}
-
-/* ---------- 유효성 검사 (상위 라운드 cascade) ---------- */
-const ORDER = ["r32", "r16", "r8", "r4", "r2"];
-function validate(profile) {
-  for (let r = 0; r < ORDER.length - 1; r++) {
-    const cur = profile[ORDER[r]];
-    const next = profile[ORDER[r + 1]];
-    for (let i = 0; i < next.length; i++) {
-      const a = cur[2 * i];
-      const b = cur[2 * i + 1];
-      if (next[i] !== a && next[i] !== b) next[i] = null;
-    }
-  }
-  // 우승: 결승 두 팀 중 하나여야 함
-  const finalists = profile.r2;
-  if (profile.champion !== finalists[0] && profile.champion !== finalists[1]) {
-    profile.champion = null;
+    const events = await DB.listEvents();
+    const filtered = events.filter(e => App.eventFilter === "all" || e.type === App.eventFilter);
+    if (!filtered.length) { wrap.innerHTML = `<p class="muted">아직 이벤트가 없어요. 아래에서 새로 만들어보세요.</p>`; return; }
+    wrap.innerHTML = filtered.map(e => {
+      const ico = e.type === "school" ? "🏫" : e.type === "staff" ? "🏢" : "🎯";
+      const typeLabel = e.type === "school" ? "학교" : e.type === "staff" ? "직원" : "기타";
+      const lock = e.final_locked ? `<span class="badge lock">최종마감</span>`
+        : e.r32_locked ? `<span class="badge lock">32강마감</span>`
+        : `<span class="badge open">진행중</span>`;
+      return `<div class="event-item" data-id="${e.id}">
+        <span class="ico">${ico}</span>
+        <div class="meta">
+          <div class="nm">${escapeHtml(e.name)}</div>
+          <div class="sub">코드 ${e.join_code} · ${typeLabel}</div>
+        </div>
+        <span class="badge ${e.type}">${typeLabel}</span>
+        ${lock}
+      </div>`;
+    }).join("");
+    wrap.querySelectorAll(".event-item").forEach(el => {
+      el.addEventListener("click", () => enterEvent(el.dataset.id));
+    });
+  } catch (e) {
+    wrap.innerHTML = `<p class="muted">목록을 불러오지 못했어요: ${escapeHtml(e.message)}</p>`;
   }
 }
 
-/* ---------- 배치 / 제거 / 승자 선택 ---------- */
-function cur() { return state.profiles[state.current]; }
+/* ===================== 이벤트 입장 ===================== */
+async function enterEvent(eventId) {
+  try {
+    const ev = await DB.getEvent(eventId);
+    if (!ev) { toast("이벤트를 찾을 수 없어요."); return; }
+    App.event = ev;
+    App.isAdmin = false; App.adminPin = null;
+    App.playerName = null; App.bracket = CORE.emptyBracket(); App.myPredId = null;
+    history.replaceState(null, "", `${location.origin}${location.pathname}?e=${ev.id}`);
+    renderEventHeader();
+    switchTab("predict");
+    document.getElementById("predictArea").classList.add("hidden");
+    document.getElementById("nameCard").classList.remove("hidden");
+    document.getElementById("playerName").value = "";
+    document.getElementById("adminPanel").classList.add("hidden");
+    document.getElementById("adminLoginCard").classList.remove("hidden");
+    show("screenEvent");
+    await refreshPredictions();
+  } catch (e) { toast(e.message); }
+}
 
+async function joinByCode() {
+  const code = document.getElementById("joinCode").value.trim().toUpperCase();
+  if (!code) { toast("참여 코드를 입력하세요."); return; }
+  try {
+    const ev = await DB.getEventByCode(code);
+    if (!ev) { toast("그 코드의 이벤트가 없어요."); return; }
+    enterEvent(ev.id);
+  } catch (e) { toast(e.message); }
+}
+
+function renderEventHeader() {
+  const ev = App.event;
+  document.getElementById("evName").textContent = ev.name;
+  document.getElementById("evCode").textContent = ev.join_code;
+  document.getElementById("evIcon").textContent = ev.type === "school" ? "🏫" : ev.type === "staff" ? "🏢" : "🎯";
+  const state = ev.final_locked ? "🔒 최종 마감됨" : ev.r32_locked ? "🔒 32강 마감 (16강~ 진행)" : "🟢 진행 중";
+  document.getElementById("evLockState").textContent = state;
+  document.getElementById("headerSub").textContent = ev.name;
+}
+
+/* ===================== 탭 ===================== */
+function switchTab(tab) {
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  document.getElementById("tabPredict").classList.toggle("hidden", tab !== "predict");
+  document.getElementById("tabRank").classList.toggle("hidden", tab !== "rank");
+  document.getElementById("tabAdmin").classList.toggle("hidden", tab !== "admin");
+  if (tab === "rank") renderRanking();
+  if (tab === "admin" && App.isAdmin) renderAdminPanel();
+}
+
+/* ===================== 새 이벤트 생성 ===================== */
+async function createEvent() {
+  const name = document.getElementById("newEventName").value.trim();
+  const type = document.getElementById("newEventType").value;
+  const pin = document.getElementById("newEventPin").value.trim();
+  if (!name) { toast("이벤트 이름을 입력하세요."); return; }
+  if (pin.length < 4) { toast("PIN은 4자리 이상이어야 해요."); return; }
+  try {
+    const ev = await DB.createEvent(name, type, pin);
+    toast(`이벤트 생성! 참여코드: ${ev.join_code}`);
+    // 생성자는 바로 관리자로 입장
+    App.adminPin = pin;
+    await enterEvent(ev.id);
+    App.isAdmin = true;
+    document.getElementById("adminLoginCard").classList.add("hidden");
+    document.getElementById("adminPanel").classList.remove("hidden");
+    openShareEvent();
+  } catch (e) { toast(e.message); }
+}
+
+/* ===================== 예측 데이터 로드 ===================== */
+async function refreshPredictions() {
+  try {
+    App.predictions = await DB.listPredictions(App.event.id);
+  } catch (e) { App.predictions = []; }
+}
+
+/* ===================== 참가자: 예측 시작 ===================== */
+async function startPredict() {
+  const name = document.getElementById("playerName").value.trim();
+  if (!name) { toast("이름을 입력하세요."); return; }
+  App.playerName = name;
+  try {
+    const mine = await DB.getMyPrediction(App.event.id, name);
+    if (mine) { App.bracket = CORE.normalize(mine.bracket); App.myPredId = mine.id; }
+    else { App.bracket = CORE.emptyBracket(); App.myPredId = null; }
+  } catch (e) { App.bracket = CORE.emptyBracket(); }
+  CORE.validate(App.bracket);
+  document.getElementById("nameCard").classList.add("hidden");
+  document.getElementById("predictArea").classList.remove("hidden");
+  document.getElementById("editingName").textContent = name;
+  renderStageHint();
+  renderBracket();
+  renderPool();
+}
+
+function stage() {
+  // 현재 단계: r32 마감 전이면 '1차', 마감 후면 '2차'
+  if (App.event.final_locked) return "closed";
+  if (App.event.r32_locked) return "phase2";
+  return "phase1";
+}
+function renderStageHint() {
+  const s = stage();
+  const hint = document.getElementById("stageHint");
+  const banner = document.getElementById("lockBanner");
+  const poolSection = document.getElementById("poolSection");
+  if (s === "phase1") {
+    hint.textContent = "[1차] 32강 16경기에 진출국을 배치하고 승자를 골라 우승까지 예측하세요.";
+    banner.innerHTML = "";
+    poolSection.classList.remove("hidden");
+  } else if (s === "phase2") {
+    hint.textContent = "[2차] 32강은 마감되어 수정할 수 없어요. 16강부터 우승까지 승자를 고르세요.";
+    banner.innerHTML = `<div class="lock-banner">🔒 1차(32강)가 마감되었습니다. 32강 배치는 고정되고 16강 이후만 수정 가능해요.</div>`;
+    poolSection.classList.add("hidden");
+  } else {
+    hint.textContent = "이 이벤트는 최종 마감되었습니다. 결과는 순위·통계 탭에서 확인하세요.";
+    banner.innerHTML = `<div class="lock-banner">🔒 최종 마감됨 — 더 이상 수정할 수 없습니다.</div>`;
+    poolSection.classList.add("hidden");
+  }
+}
+function editable() { return stage() !== "closed"; }
+function r32Editable() { return stage() === "phase1"; }
+
+/* ===================== 배치/승자 (참가자) ===================== */
 function placeSeed(slotIndex, teamId) {
-  const p = cur();
-  // 슬롯 자리 제약 검증
-  const slot = (typeof SLOTS !== "undefined") ? SLOTS[slotIndex] : null;
+  if (!r32Editable()) { toast("32강은 더 이상 수정할 수 없어요."); return; }
+  const slot = SLOTS[slotIndex];
   if (slot) {
     const t = TEAM_MAP[teamId];
-    if (!slot.groups.includes(t.group)) {
-      toast(`이 자리는 '${slot.label}' 자리예요. ${t.group}조 팀은 올 수 없어요.`);
-      return;
-    }
+    if (!slot.groups.includes(t.group)) { toast(`이 자리는 '${slot.label}' 자리예요. ${t.group}조 팀은 올 수 없어요.`); return; }
   }
-  // 이미 다른 칸에 있으면 제거 (중복 방지)
-  const existing = p.r32.indexOf(teamId);
-  if (existing !== -1 && existing !== slotIndex) p.r32[existing] = null;
-  p.r32[slotIndex] = teamId;
-  validate(p);
-  save(); render();
+  const b = App.bracket;
+  const ex = b.r32.indexOf(teamId);
+  if (ex !== -1 && ex !== slotIndex) b.r32[ex] = null;
+  b.r32[slotIndex] = teamId;
+  CORE.validate(b); renderBracket(); renderPool();
 }
-
 function removeSeed(slotIndex) {
-  const p = cur();
-  p.r32[slotIndex] = null;
-  validate(p);
-  save(); render();
+  if (!r32Editable()) { toast("32강은 더 이상 수정할 수 없어요."); return; }
+  App.bracket.r32[slotIndex] = null;
+  CORE.validate(App.bracket); renderBracket(); renderPool();
 }
-
 function pickWinner(roundKey, slotIndex) {
-  const p = cur();
-  const team = p[roundKey][slotIndex];
+  if (!editable()) { toast("마감되어 수정할 수 없어요."); return; }
+  if (roundKey === "r32" && !r32Editable()) {
+    // 2차에서는 32강 승자 선택은 허용(16강 진출). 단 r32 배치 자체는 고정.
+  }
+  const b = App.bracket;
+  const team = b[roundKey][slotIndex];
   if (!team) return;
   const ri = ORDER.indexOf(roundKey);
   const matchIndex = Math.floor(slotIndex / 2);
-  if (ri < ORDER.length - 1) {
-    p[ORDER[ri + 1]][matchIndex] = team;
-  } else {
-    // 결승 → 우승
-    p.champion = team;
-  }
-  validate(p);
-  save(); render();
+  if (ri < ORDER.length - 1) b[ORDER[ri + 1]][matchIndex] = team;
+  else b.champion = team;
+  CORE.validate(b); renderBracket();
 }
-
-/* ---------- 자동 32강 배치 (실제 대진 구조 기준) ----------
-   각 슬롯의 자리(1위/2위/3위 후보 조)에 맞춰 팀을 채운다.
-   3위 자리는 8개이며, 후보 조의 3위 팀들을 겹치지 않게 배정한다. */
 function autoFill() {
-  const p = cur();
+  if (!r32Editable()) { toast("32강은 더 이상 수정할 수 없어요."); return; }
+  const b = App.bracket;
   const r32 = new Array(32).fill(null);
   const usedThirds = new Set();
-
-  // 1·2위 자리 먼저 채우기
   SLOTS.forEach((slot, idx) => {
     if (slot.third) return;
     const g = slot.groups[0];
@@ -141,58 +233,54 @@ function autoFill() {
     const team = TEAMS.find(t => t.group === g && t.pos === pos);
     if (team) r32[idx] = team.id;
   });
-
-  // 3위 자리 채우기: 후보 조 중 아직 안 쓴 조의 3위 팀 배정
   SLOTS.forEach((slot, idx) => {
     if (!slot.third) return;
-    const candGroups = slot.groups.filter(g => !usedThirds.has(g));
-    const pick = candGroups[Math.floor(Math.random() * candGroups.length)] || slot.groups[0];
+    const cand = slot.groups.filter(g => !usedThirds.has(g));
+    const pick = cand[Math.floor(Math.random() * cand.length)] || slot.groups[0];
     usedThirds.add(pick);
     const team = TEAMS.find(t => t.group === pick && t.pos === 3);
     if (team) r32[idx] = team.id;
   });
-
-  p.r32 = r32;
-  p.r16 = new Array(16).fill(null);
-  p.r8 = new Array(8).fill(null);
-  p.r4 = new Array(4).fill(null);
-  p.r2 = new Array(2).fill(null);
-  p.champion = null;
-  save(); render();
-  toast("실제 대진 구조로 32강을 자동 배치했어요. 경기 승자를 클릭해 진행하세요.");
+  b.r32 = r32; b.r16 = new Array(16).fill(null); b.r8 = new Array(8).fill(null);
+  b.r4 = new Array(4).fill(null); b.r2 = new Array(2).fill(null); b.champion = null;
+  renderBracket(); renderPool();
+  toast("32강을 자동 배치했어요. 승자를 클릭해 진행하세요.");
 }
-function sameGroup(a, b) {
-  if (!a || !b) return false;
-  return TEAM_MAP[a].group === TEAM_MAP[b].group;
-}
-function shuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+function resetMine() {
+  if (!editable()) { toast("마감되어 초기화할 수 없어요."); return; }
+  if (!confirm("내 예측을 초기화할까요?")) return;
+  if (r32Editable()) App.bracket = CORE.emptyBracket();
+  else { // 2차에선 32강 유지, 이후만 리셋
+    App.bracket.r16 = new Array(16).fill(null); App.bracket.r8 = new Array(8).fill(null);
+    App.bracket.r4 = new Array(4).fill(null); App.bracket.r2 = new Array(2).fill(null); App.bracket.champion = null;
   }
+  renderBracket(); renderPool(); toast("초기화 완료");
 }
 
-/* ---------- 렌더링 ---------- */
-function render() {
-  renderProfilesUI();
-  renderBracket();
-  renderPool();
+async function submitMine() {
+  if (!editable()) { toast("마감되어 제출할 수 없어요."); return; }
+  if (!App.playerName) { toast("이름을 먼저 입력하세요."); return; }
+  try {
+    await DB.savePrediction(App.event.id, App.playerName, App.bracket);
+    await refreshPredictions();
+    toast("제출 완료! 순위·통계 탭에서 확인하세요.");
+  } catch (e) { toast(e.message); }
 }
 
-function renderProfilesUI() {
-  document.querySelectorAll(".profile-btn").forEach(btn => {
-    const p = btn.dataset.p;
-    btn.classList.toggle("active", p === state.current);
-    const nameEl = btn.querySelector(".pname");
-    if (nameEl) nameEl.textContent = state.profiles[p].name;
-  });
-  document.getElementById("editingName").textContent = cur().name;
+/* ===================== 브래킷 렌더링 ===================== */
+function matchInfo(roundKey, matchIndex) {
+  if (roundKey === "r32" && typeof R32_MATCHES !== "undefined") {
+    const m = R32_MATCHES[matchIndex];
+    return m ? { kst: m.kst, venue: m.venue } : null;
+  }
+  if (typeof ROUND_TIMES !== "undefined" && ROUND_TIMES[roundKey])
+    return { kst: ROUND_TIMES[roundKey][matchIndex], venue: (ROUND_VENUES[roundKey] || [])[matchIndex] };
+  return null;
 }
-
 function slotHTML(roundKey, idx, teamId, winnerOfMatch, placeable) {
   if (!teamId) {
     let label = placeable ? "빈칸" : "—";
-    if (placeable && typeof SLOTS !== "undefined" && SLOTS[idx]) label = SLOTS[idx].label;
+    if (placeable && SLOTS[idx]) label = SLOTS[idx].label;
     return `<div class="slot empty" data-round="${roundKey}" data-idx="${idx}" data-placeable="${placeable ? 1 : 0}">
       <span class="flag">+</span><span class="name slotlabel">${label}</span></div>`;
   }
@@ -202,114 +290,79 @@ function slotHTML(roundKey, idx, teamId, winnerOfMatch, placeable) {
   else if (winnerOfMatch) cls += " loser";
   const rmBtn = placeable ? `<button class="rm" title="제거" data-rm="${idx}">✕</button>` : "";
   return `<div class="${cls}" data-round="${roundKey}" data-idx="${idx}" data-team="${teamId}" data-placeable="${placeable ? 1 : 0}">
-    <span class="flag">${t.flag}</span>
-    <span class="name">${t.name}</span>
-    ${rmBtn}
-  </div>`;
+    <span class="flag">${t.flag}</span><span class="name">${t.name}</span>${rmBtn}</div>`;
 }
 
-// 라운드/경기 인덱스로 경기 시간·장소 정보 반환
-function matchInfo(roundKey, matchIndex) {
-  if (roundKey === "r32" && typeof R32_MATCHES !== "undefined") {
-    const m = R32_MATCHES[matchIndex];
-    return m ? { kst: m.kst, venue: m.venue, no: m.no } : null;
-  }
-  if (typeof ROUND_TIMES !== "undefined" && ROUND_TIMES[roundKey]) {
-    return { kst: ROUND_TIMES[roundKey][matchIndex], venue: (ROUND_VENUES[roundKey] || [])[matchIndex] };
-  }
-  return null;
-}
-
-function renderBracket() {
-  const p = cur();
-  const wrap = document.getElementById("bracket");
+// 공용 브래킷 렌더러 (대상 element, bracket, 옵션)
+function buildBracketHTML(b, opts) {
+  opts = opts || {};
+  const placeableRound = opts.interactive && r32Editable();
   let html = "";
-
-  // 우승 행 (맨 위)
+  // 우승
   html += `<div class="round champion"><div class="round-title">🏆 우승</div><div class="matches">`;
-  if (p.champion) {
-    const t = TEAM_MAP[p.champion];
-    html += `<div class="champion-box"><div class="label">CHAMPION</div>
-      <div class="flag">${t.flag}</div><div class="name">${t.name}</div></div>`;
+  if (b.champion) {
+    const t = TEAM_MAP[b.champion];
+    html += `<div class="champion-box"><div class="label">CHAMPION</div><div class="flag">${t.flag}</div><div class="name">${t.name}</div></div>`;
   } else {
-    html += `<div class="champion-box"><div class="label">CHAMPION</div>
-      <div class="empty">결승 승자를 클릭하세요</div></div>`;
+    html += `<div class="champion-box"><div class="label">CHAMPION</div><div class="empty">${opts.interactive ? "결승 승자를 클릭" : "미정"}</div></div>`;
   }
   html += `</div></div>`;
 
-  // 라운드 행: 위에서부터 결승 → ... → 32강 순으로 출력
   for (let rIdx = ROUNDS.length - 1; rIdx >= 0; rIdx--) {
     const round = ROUNDS[rIdx];
-    const arr = p[round.key];
-    const nextArr = rIdx < ORDER.length - 1 ? p[ORDER[rIdx + 1]] : null;
-    const placeable = round.key === "r32";
+    const arr = b[round.key];
+    const nextArr = rIdx < ORDER.length - 1 ? b[ORDER[rIdx + 1]] : null;
+    const placeable = opts.interactive && round.key === "r32" && r32Editable();
     html += `<div class="round"><div class="round-title">${round.title}</div><div class="matches">`;
     for (let m = 0; m < arr.length / 2; m++) {
       const s0 = 2 * m, s1 = 2 * m + 1;
-      let winner = null;
-      if (round.key === "r2") winner = p.champion;
-      else if (nextArr) winner = nextArr[m];
+      let winner = round.key === "r2" ? b.champion : (nextArr ? nextArr[m] : null);
       const info = matchInfo(round.key, m);
-      const timeHTML = info && info.kst
-        ? `<div class="mtime">🕐 ${info.kst}${info.venue ? " · " + info.venue : ""}</div>`
-        : "";
-      html += `<div class="match">`;
-      html += timeHTML;
+      const timeHTML = info && info.kst ? `<div class="mtime">🕐 ${info.kst}${info.venue ? " · " + info.venue : ""}</div>` : "";
+      html += `<div class="match">${timeHTML}`;
       html += slotHTML(round.key, s0, arr[s0], winner, placeable);
       html += slotHTML(round.key, s1, arr[s1], winner, placeable);
       html += `</div>`;
     }
     html += `</div></div>`;
   }
-
-  wrap.innerHTML = html;
-  attachBracketEvents();
+  return html;
 }
 
-function attachBracketEvents() {
-  document.querySelectorAll(".slot").forEach(slot => {
+function renderBracket() {
+  const wrap = document.getElementById("bracket");
+  wrap.innerHTML = buildBracketHTML(App.bracket, { interactive: true });
+  attachBracketEvents(wrap);
+}
+
+function attachBracketEvents(wrap) {
+  wrap.querySelectorAll(".slot").forEach(slot => {
     const roundKey = slot.dataset.round;
     const idx = parseInt(slot.dataset.idx, 10);
     const placeable = slot.dataset.placeable === "1";
     const team = slot.dataset.team;
-
-    // 클릭
     slot.addEventListener("click", (e) => {
-      if (e.target.dataset.rm !== undefined) return; // 제거버튼은 별도
-      if (placeable && !team) {
-        // 빈 r32 칸 → 선택된 칩 배치
-        if (selectedChip) { placeSeed(idx, selectedChip); selectedChip = null; }
-        return;
-      }
+      if (e.target.dataset.rm !== undefined) return;
+      if (placeable && !team) { if (App.selectedChip) { placeSeed(idx, App.selectedChip); App.selectedChip = null; } return; }
       if (team) pickWinner(roundKey, idx);
     });
-
-    // 제거 버튼
     const rm = slot.querySelector(".rm");
     if (rm) rm.addEventListener("click", (e) => { e.stopPropagation(); removeSeed(idx); });
-
-    // 드래그 앤 드롭 (r32만)
     if (placeable) {
       slot.addEventListener("dragover", (e) => { e.preventDefault(); slot.classList.add("dragover"); });
       slot.addEventListener("dragleave", () => slot.classList.remove("dragover"));
-      slot.addEventListener("drop", (e) => {
-        e.preventDefault();
-        slot.classList.remove("dragover");
-        const id = e.dataTransfer.getData("text/plain");
-        if (id) placeSeed(idx, id);
-      });
+      slot.addEventListener("drop", (e) => { e.preventDefault(); slot.classList.remove("dragover");
+        const id = e.dataTransfer.getData("text/plain"); if (id) placeSeed(idx, id); });
     }
   });
 }
 
 function renderPool() {
-  const p = cur();
-  const used = new Set(p.r32.filter(Boolean));
+  const used = new Set(App.bracket.r32.filter(Boolean));
   const q = (document.getElementById("poolSearch").value || "").trim().toLowerCase();
   const poolEl = document.getElementById("pool");
-  const groups = [...new Set(TEAMS.map(t => t.group))]; // A..L
+  const groups = [...new Set(TEAMS.map(t => t.group))];
   let html = "";
-
   groups.forEach(g => {
     const teams = TEAMS.filter(t => t.group === g).sort((a, b) => a.pos - b.pos);
     let chips = "";
@@ -317,293 +370,410 @@ function renderPool() {
       const match = !q || t.name.toLowerCase().includes(q) || t.group.toLowerCase() === q || (t.group + t.pos).toLowerCase() === q;
       if (!match) return;
       const isUsed = used.has(t.id);
-      const isSel = selectedChip === t.id;
-      chips += `<div class="chip ${isUsed ? "used" : ""} ${isSel ? "selected" : ""}"
-        draggable="${!isUsed}" data-team="${t.id}">
-        <span class="flag">${t.flag}</span>
-        <span class="cname">${t.name}</span>
-      </div>`;
+      const isSel = App.selectedChip === t.id;
+      chips += `<div class="chip ${isUsed ? "used" : ""} ${isSel ? "selected" : ""}" draggable="${!isUsed}" data-team="${t.id}">
+        <span class="flag">${t.flag}</span><span class="cname">${t.name}</span></div>`;
     });
-    if (!chips) return; // 검색결과 없으면 해당 조 숨김
+    if (!chips) return;
     html += `<div class="grp-col"><div class="grp-head">${g}조</div>${chips}</div>`;
   });
-
   poolEl.innerHTML = html;
   document.getElementById("poolCount").textContent = `(${used.size}/32 배치 · 총 48개국)`;
-
   poolEl.querySelectorAll(".chip").forEach(chip => {
     const id = chip.dataset.team;
     if (chip.classList.contains("used")) return;
     chip.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/plain", id); });
     chip.addEventListener("click", () => {
-      selectedChip = (selectedChip === id) ? null : id;
+      App.selectedChip = (App.selectedChip === id) ? null : id;
       renderPool();
-      toast(selectedChip ? `${TEAM_MAP[id].name} 선택됨 — 빈 칸을 클릭하세요` : "선택 해제");
+      toast(App.selectedChip ? `${TEAM_MAP[id].name} 선택됨 — 빈 칸을 클릭하세요` : "선택 해제");
     });
   });
 }
 
-/* ---------- 프로필 전환 / 이름변경 / 초기화 ---------- */
-function switchProfile(p) {
-  state.current = p;
-  selectedChip = null;
-  save(); render();
+/* ===================== 순위 · 통계 ===================== */
+function getActual() {
+  return App.event && App.event.actual ? CORE.normalize(App.event.actual) : null;
 }
-function renameCurrent() {
-  const name = prompt("프로필 이름을 입력하세요:", cur().name);
-  if (name && name.trim()) { cur().name = name.trim(); save(); render(); }
+function computeScores() {
+  const actual = getActual();
+  return App.predictions.map(p => {
+    const b = CORE.normalize(p.bracket);
+    const sc = actual ? CORE.score(b, actual) : null;
+    return { id: p.id, name: p.name, bracket: b, score: sc };
+  });
 }
-function resetCurrent() {
-  if (!confirm(`'${cur().name}'의 예측을 모두 초기화할까요?`)) return;
-  state.profiles[state.current] = emptyProfile(cur().name);
-  selectedChip = null;
-  save(); render();
-  toast("초기화 완료");
+function renderRanking() {
+  const actual = getActual();
+  const note = document.getElementById("rankNote");
+  const list = document.getElementById("rankList");
+  const cards = document.getElementById("statCards");
+
+  if (!App.predictions.length) {
+    cards.innerHTML = ""; list.innerHTML = `<p class="muted">아직 제출된 예측이 없어요.</p>`; note.textContent = ""; return;
+  }
+  if (!actual) {
+    note.textContent = "실제 결과가 아직 입력되지 않아 적중률을 계산할 수 없어요. (관리자 탭에서 입력)";
+  } else {
+    note.textContent = "각 라운드 실제 진출팀 중 맞힌 수로 채점하고, 우승 적중은 가중치 3배입니다.";
+  }
+
+  let scored = computeScores();
+  const mode = document.getElementById("rankMode").value;
+  const onlyChamp = document.getElementById("onlyChamp").checked;
+  const q = (document.getElementById("rankSearch").value || "").trim().toLowerCase();
+
+  // 통계 카드
+  if (actual) {
+    const rates = scored.map(s => s.score.rate);
+    const avg = Math.round(rates.reduce((a, b) => a + b, 0) / rates.length);
+    const best = scored.slice().sort((a, b) => b.score.rate - a.score.rate)[0];
+    const champCount = scored.filter(s => s.score.champHit).length;
+    cards.innerHTML = `
+      <div class="stat-box"><div class="big">${App.predictions.length}</div><div class="lbl">참가자 수</div></div>
+      <div class="stat-box"><div class="big">${avg}%</div><div class="lbl">평균 적중률</div></div>
+      <div class="stat-box"><div class="big">${best ? best.score.rate + "%" : "-"}</div><div class="lbl">최고 적중률 (${best ? escapeHtml(best.name) : "-"})</div></div>
+      <div class="stat-box"><div class="big">${champCount}</div><div class="lbl">우승국 적중자</div></div>`;
+  } else {
+    cards.innerHTML = `<div class="stat-box"><div class="big">${App.predictions.length}</div><div class="lbl">참가자 수</div></div>`;
+  }
+
+  // 필터
+  if (onlyChamp && actual) scored = scored.filter(s => s.score.champHit);
+  if (q) scored = scored.filter(s => s.name.toLowerCase().includes(q));
+
+  // 정렬
+  if (actual) {
+    scored.sort((a, b) => {
+      if (mode === "r32") {
+        const ar = a.score.result.r32, br = b.score.result.r32;
+        if (br.hit !== ar.hit) return br.hit - ar.hit;
+        return b.score.rate - a.score.rate;
+      }
+      return b.score.totalHit - a.score.totalHit || b.score.rate - a.score.rate;
+    });
+  } else {
+    scored.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  if (!scored.length) { list.innerHTML = `<p class="muted">조건에 맞는 참가자가 없어요.</p>`; return; }
+
+  list.innerHTML = scored.map((s, i) => {
+    const champTeam = s.bracket.champion ? TEAM_MAP[s.bracket.champion] : null;
+    const champHtml = champTeam ? `${champTeam.flag} ${champTeam.name}` : "미정";
+    let rateHtml = "";
+    if (actual) {
+      const r32hit = s.score.result.r32.hit, r32pos = s.score.result.r32.possible;
+      const detail = mode === "r32" ? `32강 ${r32hit}/${r32pos || "?"} 적중` : `총점 ${s.score.totalHit}`;
+      rateHtml = `<div class="rate">${s.score.rate}%<small> ${detail}</small></div>`;
+    } else {
+      rateHtml = `<div class="rate" style="font-size:13px;color:var(--muted);">제출됨</div>`;
+    }
+    const champPill = (actual && s.score.champHit) ? `<span class="pill hit">우승적중</span>` : "";
+    return `<div class="rank-row ${i === 0 && actual ? "top1" : ""}" data-id="${s.id}">
+      <div class="pos">${actual ? (i + 1) : "•"}</div>
+      <div class="pname">${escapeHtml(s.name)}${champPill}<div class="sub champ">🏆 ${champHtml}</div></div>
+      ${rateHtml}
+    </div>`;
+  }).join("");
+
+  list.querySelectorAll(".rank-row").forEach(row => {
+    row.addEventListener("click", () => openDetail(row.dataset.id));
+  });
 }
 
-/* ---------- 공유 / 가져오기 ---------- */
-function encodeProfile(p) {
-  const payload = { v: 1, name: p.name, r32: p.r32, r16: p.r16, r8: p.r8, r4: p.r4, r2: p.r2, champion: p.champion };
-  return btoa(encodeURIComponent(JSON.stringify(payload)));
+function openDetail(predId) {
+  const p = App.predictions.find(x => x.id === predId);
+  if (!p) return;
+  const b = CORE.normalize(p.bracket);
+  const actual = getActual();
+  document.getElementById("detailName").textContent = `${p.name} 님의 예측`;
+  let summary = "";
+  if (actual) {
+    const sc = CORE.score(b, actual);
+    summary = `적중률 ${sc.rate}% · 32강 ${sc.result.r32.hit}/${sc.result.r32.possible} · 16강 ${sc.result.r16.hit}/${sc.result.r16.possible} · 우승 ${sc.champHit ? "적중 ✅" : "실패 ❌"}`;
+  } else {
+    const champ = b.champion ? TEAM_MAP[b.champion] : null;
+    summary = `예측 우승국: ${champ ? champ.flag + " " + champ.name : "미정"}`;
+  }
+  document.getElementById("detailSummary").textContent = summary;
+  document.getElementById("detailBracket").innerHTML = buildBracketHTML(b, { interactive: false });
+  showModal("detailModal");
 }
-function decodeProfile(code) {
-  const json = decodeURIComponent(atob(code.trim()));
-  return JSON.parse(json);
+
+/* ===================== 관리자 ===================== */
+async function adminLogin() {
+  const pin = document.getElementById("adminPin").value.trim();
+  if (!pin) { toast("PIN을 입력하세요."); return; }
+  try {
+    const ok = await DB.adminVerify(App.event.id, pin);
+    if (!ok) { toast("PIN이 올바르지 않아요."); return; }
+    App.isAdmin = true; App.adminPin = pin;
+    document.getElementById("adminLoginCard").classList.add("hidden");
+    document.getElementById("adminPanel").classList.remove("hidden");
+    renderAdminPanel();
+    toast("관리자 로그인 완료");
+  } catch (e) { toast(e.message); }
 }
-function shareURL(code) {
-  const base = location.origin + location.pathname;
-  return `${base}?d=${code}`;
+
+async function renderAdminPanel() {
+  await refreshEvent();
+  await refreshPredictions();
+  const ev = App.event;
+  const st = document.getElementById("adminLockState");
+  st.innerHTML = `
+    <div class="lock-banner ${ev.r32_locked ? "" : "open"}">1차(32강): <b>${ev.r32_locked ? "마감됨 🔒" : "진행중 🟢"}</b></div>
+    <div class="lock-banner ${ev.final_locked ? "" : "open"}">2차(전체): <b>${ev.final_locked ? "마감됨 🔒" : "진행중 🟢"}</b>
+      &nbsp; 실제결과: <b>${ev.actual ? "입력됨 ✅" : "미입력"}</b></div>`;
+  document.getElementById("btnLockR32").textContent = ev.r32_locked ? "🔓 1차(32강) 마감 해제" : "🔒 1차(32강) 마감";
+  document.getElementById("btnLockFinal").textContent = ev.final_locked ? "🔓 2차(전체) 마감 해제" : "🔒 2차(전체) 마감";
+
+  const listEl = document.getElementById("adminPredList");
+  document.getElementById("adminCount").textContent = `(${App.predictions.length}명)`;
+  if (!App.predictions.length) { listEl.innerHTML = `<p class="muted">아직 제출이 없어요.</p>`; return; }
+  const actual = getActual();
+  const scored = computeScores();
+  listEl.innerHTML = scored.map(s => {
+    const champ = s.bracket.champion ? TEAM_MAP[s.bracket.champion] : null;
+    const rate = actual ? `${s.score.rate}%` : "—";
+    return `<div class="admin-pred-row">
+      <span class="nm">${escapeHtml(s.name)}</span>
+      <span class="muted" style="font-size:12px;">🏆 ${champ ? champ.flag + champ.name : "미정"}</span>
+      <span style="font-weight:700;">${rate}</span>
+      <button class="btn" data-view="${s.id}" style="padding:5px 10px;">보기</button>
+      <button class="btn danger" data-del="${s.id}" style="padding:5px 10px;">삭제</button>
+    </div>`;
+  }).join("");
+  listEl.querySelectorAll("[data-view]").forEach(b => b.addEventListener("click", () => openDetail(b.dataset.view)));
+  listEl.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => adminDelete(b.dataset.del)));
 }
-function openShare() {
-  const code = encodeProfile(cur());
-  document.getElementById("shareCode").value = code;
-  document.getElementById("shareLink").value = shareURL(code);
-  document.getElementById("shareProfileName").textContent = cur().name;
+
+async function refreshEvent() {
+  try { const ev = await DB.getEvent(App.event.id); if (ev) { App.event = ev; renderEventHeader(); } } catch (e) {}
+}
+
+async function toggleLock(which) {
+  const cur = which === "r32" ? App.event.r32_locked : App.event.final_locked;
+  const next = !cur;
+  const msg = which === "r32"
+    ? (next ? "1차(32강)를 마감할까요? 참가자는 32강을 더 못 바꿉니다." : "1차 마감을 해제할까요?")
+    : (next ? "2차(전체)를 마감할까요? 모든 수정이 잠깁니다." : "2차 마감을 해제할까요?");
+  if (!confirm(msg)) return;
+  try {
+    await DB.adminSetLock(App.event.id, App.adminPin, which, next);
+    toast("적용됐어요.");
+    renderAdminPanel();
+  } catch (e) { toast(e.message); }
+}
+
+// 관리자: 실제 결과 입력 → 본인이 직접 브래킷을 채워서 저장
+let editingActual = false;
+function editActual() {
+  editingActual = true;
+  App.playerName = "__actual__";
+  App.bracket = getActual() || CORE.emptyBracket();
+  // 실제결과 입력은 마감과 무관하게 항상 편집 가능해야 하므로 임시로 phase1처럼 동작
+  switchTab("predict");
+  document.getElementById("nameCard").classList.add("hidden");
+  document.getElementById("predictArea").classList.remove("hidden");
+  document.getElementById("editingName").textContent = "🎯 실제 결과";
+  document.getElementById("stageHint").textContent = "[관리자] 실제 경기 결과대로 32강 배치 후 승자를 골라 우승까지 입력하고 '제출/저장'을 누르세요.";
+  document.getElementById("lockBanner").innerHTML = `<div class="lock-banner open">🎯 실제 결과 입력 모드입니다. 저장하면 모두의 적중률이 계산돼요.</div>`;
+  document.getElementById("poolSection").classList.remove("hidden");
+  renderBracketActual();
+  renderPoolActual();
+}
+
+// 실제결과 모드 전용 렌더 (편집 항상 허용)
+function renderBracketActual() {
+  const wrap = document.getElementById("bracket");
+  wrap.innerHTML = buildBracketActualHTML(App.bracket);
+  attachBracketEventsActual(wrap);
+}
+function buildBracketActualHTML(b) {
+  // r32 항상 배치 가능
+  let html = "";
+  html += `<div class="round champion"><div class="round-title">🏆 우승</div><div class="matches">`;
+  if (b.champion) { const t = TEAM_MAP[b.champion]; html += `<div class="champion-box"><div class="label">CHAMPION</div><div class="flag">${t.flag}</div><div class="name">${t.name}</div></div>`; }
+  else html += `<div class="champion-box"><div class="label">CHAMPION</div><div class="empty">결승 승자를 클릭</div></div>`;
+  html += `</div></div>`;
+  for (let rIdx = ROUNDS.length - 1; rIdx >= 0; rIdx--) {
+    const round = ROUNDS[rIdx], arr = b[round.key];
+    const nextArr = rIdx < ORDER.length - 1 ? b[ORDER[rIdx + 1]] : null;
+    const placeable = round.key === "r32";
+    html += `<div class="round"><div class="round-title">${round.title}</div><div class="matches">`;
+    for (let m = 0; m < arr.length / 2; m++) {
+      const s0 = 2 * m, s1 = 2 * m + 1;
+      let winner = round.key === "r2" ? b.champion : (nextArr ? nextArr[m] : null);
+      const info = matchInfo(round.key, m);
+      const timeHTML = info && info.kst ? `<div class="mtime">🕐 ${info.kst}${info.venue ? " · " + info.venue : ""}</div>` : "";
+      html += `<div class="match">${timeHTML}`;
+      html += slotHTML(round.key, s0, arr[s0], winner, placeable);
+      html += slotHTML(round.key, s1, arr[s1], winner, placeable);
+      html += `</div>`;
+    }
+    html += `</div></div>`;
+  }
+  return html;
+}
+function attachBracketEventsActual(wrap) {
+  wrap.querySelectorAll(".slot").forEach(slot => {
+    const roundKey = slot.dataset.round;
+    const idx = parseInt(slot.dataset.idx, 10);
+    const placeable = slot.dataset.placeable === "1";
+    const team = slot.dataset.team;
+    slot.addEventListener("click", (e) => {
+      if (e.target.dataset.rm !== undefined) return;
+      if (placeable && !team) { if (App.selectedChip) { placeSeedActual(idx, App.selectedChip); App.selectedChip = null; } return; }
+      if (team) pickWinnerActual(roundKey, idx);
+    });
+    const rm = slot.querySelector(".rm");
+    if (rm) rm.addEventListener("click", (e) => { e.stopPropagation(); App.bracket.r32[idx] = null; CORE.validate(App.bracket); renderBracketActual(); renderPoolActual(); });
+    if (placeable) {
+      slot.addEventListener("dragover", (e) => { e.preventDefault(); slot.classList.add("dragover"); });
+      slot.addEventListener("dragleave", () => slot.classList.remove("dragover"));
+      slot.addEventListener("drop", (e) => { e.preventDefault(); slot.classList.remove("dragover");
+        const id = e.dataTransfer.getData("text/plain"); if (id) placeSeedActual(idx, id); });
+    }
+  });
+}
+function placeSeedActual(slotIndex, teamId) {
+  const slot = SLOTS[slotIndex];
+  if (slot) { const t = TEAM_MAP[teamId]; if (!slot.groups.includes(t.group)) { toast(`이 자리는 '${slot.label}' 자리예요.`); return; } }
+  const b = App.bracket;
+  const ex = b.r32.indexOf(teamId); if (ex !== -1 && ex !== slotIndex) b.r32[ex] = null;
+  b.r32[slotIndex] = teamId; CORE.validate(b); renderBracketActual(); renderPoolActual();
+}
+function pickWinnerActual(roundKey, slotIndex) {
+  const b = App.bracket; const team = b[roundKey][slotIndex]; if (!team) return;
+  const ri = ORDER.indexOf(roundKey); const mi = Math.floor(slotIndex / 2);
+  if (ri < ORDER.length - 1) b[ORDER[ri + 1]][mi] = team; else b.champion = team;
+  CORE.validate(b); renderBracketActual();
+}
+function renderPoolActual() {
+  const used = new Set(App.bracket.r32.filter(Boolean));
+  const q = (document.getElementById("poolSearch").value || "").trim().toLowerCase();
+  const poolEl = document.getElementById("pool");
+  const groups = [...new Set(TEAMS.map(t => t.group))];
+  let html = "";
+  groups.forEach(g => {
+    const teams = TEAMS.filter(t => t.group === g).sort((a, b) => a.pos - b.pos);
+    let chips = "";
+    teams.forEach(t => {
+      const match = !q || t.name.toLowerCase().includes(q) || t.group.toLowerCase() === q;
+      if (!match) return;
+      const isUsed = used.has(t.id), isSel = App.selectedChip === t.id;
+      chips += `<div class="chip ${isUsed ? "used" : ""} ${isSel ? "selected" : ""}" draggable="${!isUsed}" data-team="${t.id}">
+        <span class="flag">${t.flag}</span><span class="cname">${t.name}</span></div>`;
+    });
+    if (!chips) return;
+    html += `<div class="grp-col"><div class="grp-head">${g}조</div>${chips}</div>`;
+  });
+  poolEl.innerHTML = html;
+  document.getElementById("poolCount").textContent = `(${used.size}/32 배치)`;
+  poolEl.querySelectorAll(".chip").forEach(chip => {
+    const id = chip.dataset.team; if (chip.classList.contains("used")) return;
+    chip.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/plain", id); });
+    chip.addEventListener("click", () => { App.selectedChip = (App.selectedChip === id) ? null : id; renderPoolActual(); });
+  });
+}
+async function saveActual() {
+  try {
+    await DB.adminSetActual(App.event.id, App.adminPin, App.bracket);
+    await refreshEvent();
+    editingActual = false;
+    toast("실제 결과를 저장했어요. 적중률이 계산됩니다.");
+    switchTab("admin");
+  } catch (e) { toast(e.message); }
+}
+
+async function adminDelete(predId) {
+  const p = App.predictions.find(x => x.id === predId);
+  if (!p) return;
+  if (!confirm(`'${p.name}' 님의 예측을 삭제할까요?`)) return;
+  try {
+    await DB.adminDeletePrediction(App.event.id, App.adminPin, predId);
+    await refreshPredictions(); renderAdminPanel();
+    toast("삭제했어요.");
+  } catch (e) { toast(e.message); }
+}
+
+/* ===================== 공유 ===================== */
+function openShareEvent() {
+  const url = `${location.origin}${location.pathname}?e=${App.event.id}`;
+  document.getElementById("shareLink").value = url;
+  document.getElementById("shareCodeText").textContent = App.event.join_code;
   showModal("shareModal");
 }
-function doImport(code, target) {
-  try {
-    const data = decodeProfile(code);
-    state.profiles[target] = normalizeProfile(data, PROFILE_DEFAULT_NAMES[target]);
-    validate(state.profiles[target]);
-    save();
-    closeModals();
-    if (state.current === target) render(); else { state.current = target; render(); }
-    toast(`'${state.profiles[target].name}' 예측을 ${PROFILE_DEFAULT_NAMES[target]} 칸에 불러왔어요`);
-  } catch (e) {
-    alert("코드를 해석할 수 없습니다. 올바른 공유 코드인지 확인하세요.");
-  }
-}
 
-/* ---------- 승률 비교 ---------- */
-function scoreAgainstActual(predict, actual) {
-  // 라운드별: 예측 진출팀 중 실제 진출팀과 일치하는 수
-  const result = {};
-  let totalHit = 0, totalPossible = 0;
-  const rounds = [
-    { key: "r32", label: "32강 진출", weight: 1 },
-    { key: "r16", label: "16강 진출", weight: 1 },
-    { key: "r8",  label: "8강 진출",  weight: 1 },
-    { key: "r4",  label: "4강 진출",  weight: 1 },
-    { key: "r2",  label: "결승 진출", weight: 1 },
-  ];
-  rounds.forEach(r => {
-    const actSet = new Set(actual[r.key].filter(Boolean));
-    const predSet = new Set(predict[r.key].filter(Boolean));
-    let hit = 0;
-    predSet.forEach(id => { if (actSet.has(id)) hit++; });
-    const possible = actSet.size; // 실제 진출 팀 수 기준
-    result[r.key] = { label: r.label, hit, possible, predicted: predSet.size };
-    totalHit += hit;
-    totalPossible += possible;
-  });
-  // 우승 적중
-  const champHit = (predict.champion && predict.champion === actual.champion) ? 1 : 0;
-  const champPossible = actual.champion ? 1 : 0;
-  result.champion = { label: "우승 적중", hit: champHit, possible: champPossible, predicted: predict.champion ? 1 : 0 };
-  totalHit += champHit * 3; // 우승은 가중치 3
-  totalPossible += champPossible * 3;
-  const rate = totalPossible > 0 ? Math.round((totalHit / totalPossible) * 100) : 0;
-  return { result, totalHit, totalPossible, rate };
-}
-
-function openCompare() {
-  const actual = state.profiles.actual;
-  const hasActual = actual.r32.some(Boolean);
-  const body = document.getElementById("compareBody");
-  if (!hasActual) {
-    body.innerHTML = `<div class="verdict">먼저 <b>실제결과</b> 프로필에 실제 대진과 결과를 입력하세요.<br/>
-      (상단 '실제결과' 선택 → 32강 배치 → 경기 승자 클릭)</div>`;
-    showModal("compareModal");
-    return;
-  }
-  const me = scoreAgainstActual(state.profiles.me, actual);
-  const rival = scoreAgainstActual(state.profiles.rival, actual);
-
-  let verdict;
-  if (me.rate > rival.rate) verdict = `🏆 <b>${state.profiles.me.name}</b> 우세! (${me.rate}% vs ${rival.rate}%)`;
-  else if (rival.rate > me.rate) verdict = `🏆 <b>${state.profiles.rival.name}</b> 우세! (${rival.rate}% vs ${me.rate}%)`;
-  else verdict = `🤝 무승부! (둘 다 ${me.rate}%)`;
-
-  const card = (cls, name, sc) => {
-    const wrong = sc.totalPossible - sc.totalHit;
-    return `<div class="cmp-card ${cls}">
-      <h3><span class="dot"></span>${name}</h3>
-      <div class="winrate">${sc.rate}%<small> 적중률</small></div>
-      <div class="cmp-stats">
-        <span>✅ 적중 <span class="ok">${sc.totalHit}</span></span>
-        <span>❌ 빗나감 <span class="no">${wrong < 0 ? 0 : wrong}</span></span>
-        <span>총점 ${sc.totalHit}/${sc.totalPossible}</span>
-      </div>
-      <div class="bar"><span style="width:${sc.rate}%"></span></div>
-    </div>`;
-  };
-
-  let rows = "";
-  ["r32", "r16", "r8", "r4", "r2", "champion"].forEach(k => {
-    const m = me.result[k], rv = rival.result[k];
-    rows += `<tr>
-      <td class="round-label">${m.label}</td>
-      <td>${m.hit} / ${m.possible}</td>
-      <td>${rv.hit} / ${rv.possible}</td>
-    </tr>`;
-  });
-
-  body.innerHTML = `
-    <div class="cmp-cards">
-      ${card("me", state.profiles.me.name, me)}
-      ${card("rival", state.profiles.rival.name, rival)}
-    </div>
-    <div class="verdict">${verdict}</div>
-    <table class="breakdown">
-      <thead><tr><th>라운드</th><th>${state.profiles.me.name}</th><th>${state.profiles.rival.name}</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <p class="muted" style="margin-top:12px;">※ 각 라운드는 '실제 진출 팀 중 맞힌 수'로 채점하며, 우승 적중은 가중치 3배로 계산합니다.</p>
-  `;
-  showModal("compareModal");
-}
-
-/* ---------- 모달 / 토스트 유틸 ---------- */
+/* ===================== 유틸 ===================== */
 function showModal(id) { document.getElementById(id).classList.add("show"); }
 function closeModals() { document.querySelectorAll(".overlay").forEach(o => o.classList.remove("show")); }
 let toastTimer;
 function toast(msg) {
   const t = document.getElementById("toast");
-  t.textContent = msg;
-  t.classList.add("show");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2400);
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+/* ===================== 제출/저장 버튼 분기 ===================== */
+function handleSubmit() {
+  if (editingActual) saveActual();
+  else submitMine();
 }
 
-/* ---------- URL 링크로 받은 예측 처리 ---------- */
-function handleIncomingLink() {
-  const params = new URLSearchParams(location.search);
-  const code = params.get("d");
-  if (!code) return;
-  try {
-    const data = decodeProfile(code);
-    const name = data.name || "공유된 예측";
-    // 어느 프로필로 불러올지 선택
-    const target = pickImportTarget(name);
-    if (target) {
-      state.profiles[target] = normalizeProfile(data, PROFILE_DEFAULT_NAMES[target]);
-      validate(state.profiles[target]);
-      state.current = target;
-      save();
-      toast(`'${name}' 예측을 ${PROFILE_DEFAULT_NAMES[target]} 칸에 불러왔어요`);
-    }
-  } catch (e) {
-    alert("링크의 예측 데이터를 읽을 수 없습니다.");
-  }
-  // 주소창에서 ?d= 제거 (새로고침 시 재적용 방지)
-  history.replaceState(null, "", location.origin + location.pathname);
-}
-function pickImportTarget(name) {
-  const ans = prompt(
-    `링크로 '${name}'의 예측을 받았어요. 어디에 저장할까요?\n\n` +
-    `1 = 후배\n2 = 나\n3 = 실제결과\n\n번호를 입력하세요 (취소하면 안 불러옴):`,
-    "1"
-  );
-  if (ans === null) return null;
-  const map = { "1": "rival", "2": "me", "3": "actual" };
-  return map[ans.trim()] || "rival";
-}
+/* ===================== 초기화 / 이벤트 바인딩 ===================== */
+async function init() {
+  // 홈
+  document.getElementById("btnHome").addEventListener("click", goHome);
+  document.getElementById("appTitle").addEventListener("click", goHome);
+  document.getElementById("btnJoin").addEventListener("click", joinByCode);
+  document.getElementById("btnCreateEvent").addEventListener("click", createEvent);
+  document.querySelectorAll("#eventFilter button").forEach(b => b.addEventListener("click", () => {
+    document.querySelectorAll("#eventFilter button").forEach(x => x.classList.remove("active"));
+    b.classList.add("active"); App.eventFilter = b.dataset.f; loadEventList();
+  }));
 
-/* ---------- 이벤트 바인딩 ---------- */
-function init() {
-  load();
-  handleIncomingLink();
-  render();
+  // 탭
+  document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => switchTab(b.dataset.tab)));
 
-  document.querySelectorAll(".profile-btn").forEach(btn => {
-    btn.addEventListener("click", () => switchProfile(btn.dataset.p));
-  });
-  document.getElementById("btnRename").addEventListener("click", renameCurrent);
+  // 예측
+  document.getElementById("btnStartPredict").addEventListener("click", startPredict);
   document.getElementById("btnAuto").addEventListener("click", autoFill);
-  document.getElementById("btnReset").addEventListener("click", resetCurrent);
-  document.getElementById("btnCompare").addEventListener("click", openCompare);
-  document.getElementById("btnShare").addEventListener("click", openShare);
-  document.getElementById("btnImport").addEventListener("click", () => {
-    document.getElementById("importTarget").value = state.current === "actual" ? "actual" : (state.current === "me" ? "me" : "rival");
-    showModal("importModal");
-  });
-  document.getElementById("poolSearch").addEventListener("input", renderPool);
+  document.getElementById("btnReset").addEventListener("click", resetMine);
+  document.getElementById("btnSubmit").addEventListener("click", handleSubmit);
+  document.getElementById("poolSearch").addEventListener("input", () => editingActual ? renderPoolActual() : renderPool());
 
-  document.getElementById("btnCopyCode").addEventListener("click", () => {
-    const ta = document.getElementById("shareCode");
-    ta.select();
-    navigator.clipboard.writeText(ta.value).then(() => toast("코드를 복사했어요!"))
-      .catch(() => { document.execCommand("copy"); toast("코드를 복사했어요!"); });
-  });
+  // 관리자
+  document.getElementById("btnAdminLogin").addEventListener("click", adminLogin);
+  document.getElementById("btnLockR32").addEventListener("click", () => toggleLock("r32"));
+  document.getElementById("btnLockFinal").addEventListener("click", () => toggleLock("final"));
+  document.getElementById("btnEditActual").addEventListener("click", editActual);
+  document.getElementById("btnRefreshAdmin").addEventListener("click", renderAdminPanel);
+
+  // 순위 필터
+  document.getElementById("rankMode").addEventListener("change", renderRanking);
+  document.getElementById("onlyChamp").addEventListener("change", renderRanking);
+  document.getElementById("rankSearch").addEventListener("input", renderRanking);
+
+  // 공유
+  document.getElementById("btnShareEvent").addEventListener("click", openShareEvent);
   document.getElementById("btnCopyLink").addEventListener("click", () => {
-    const ta = document.getElementById("shareLink");
-    ta.select();
-    navigator.clipboard.writeText(ta.value).then(() => toast("링크를 복사했어요!"))
-      .catch(() => { document.execCommand("copy"); toast("링크를 복사했어요!"); });
-  });
-  document.getElementById("btnDownload").addEventListener("click", () => {
-    const p = cur();
-    const payload = { v: 1, name: p.name, r32: p.r32, r16: p.r16, r8: p.r8, r4: p.r4, r2: p.r2, champion: p.champion };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `worldcup2026-${p.name}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast("파일로 저장했어요");
-  });
-  document.getElementById("btnDoImport").addEventListener("click", () => {
-    const code = document.getElementById("importCode").value;
-    const target = document.getElementById("importTarget").value;
-    if (!code.trim()) { alert("공유 코드를 붙여넣으세요."); return; }
-    doImport(code, target);
+    const ta = document.getElementById("shareLink"); ta.select();
+    navigator.clipboard.writeText(ta.value).then(() => toast("링크 복사 완료!")).catch(() => { document.execCommand("copy"); toast("링크 복사 완료!"); });
   });
 
-  // 파일 내보내기/가져오기
-  document.getElementById("btnImportFile").addEventListener("click", () => document.getElementById("fileInput").click());
-  document.getElementById("fileInput").addEventListener("change", (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const data = JSON.parse(reader.result);
-        const target = document.getElementById("importTarget").value;
-        state.profiles[target] = normalizeProfile(data, PROFILE_DEFAULT_NAMES[target]);
-        validate(state.profiles[target]);
-        save(); closeModals(); switchProfile(target);
-        toast("파일에서 불러왔어요");
-      } catch (err) { alert("JSON 파일을 읽을 수 없습니다."); }
-    };
-    reader.readAsText(file);
-    e.target.value = "";
-  });
-
+  // 모달 닫기
   document.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", closeModals));
   document.querySelectorAll(".overlay").forEach(o => o.addEventListener("click", (e) => { if (e.target === o) closeModals(); }));
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModals(); });
+
+  // 링크로 이벤트 직접 입장
+  const params = new URLSearchParams(location.search);
+  const eid = params.get("e");
+  if (DB.configured() && eid) { await enterEvent(eid); return; }
+  goHome();
 }
 
 document.addEventListener("DOMContentLoaded", init);

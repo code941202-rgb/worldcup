@@ -227,105 +227,292 @@
   }
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
   input[type=file]{display:none;}
+
+  /* ===== 멀티유저 화면 ===== */
+  .hidden{display:none !important;}
+  .screen{max-width:1024px;margin:0 auto;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px;}
+  .card h2{margin:0 0 4px;font-size:17px;}
+  .card .muted{color:var(--muted);font-size:13px;margin:0 0 14px;}
+  .field{margin-bottom:10px;}
+  .field label{display:block;font-size:12px;color:var(--muted);font-weight:600;margin-bottom:4px;}
+  .input{
+    width:100%;border:1px solid var(--line);background:var(--bg);color:var(--text);
+    padding:9px 12px;border-radius:10px;font-size:14px;
+  }
+  .row-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  @media(max-width:560px){.row-2{grid-template-columns:1fr;}}
+  .seg{display:flex;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:4px;flex-wrap:wrap;}
+  .seg button{border:0;background:transparent;color:var(--muted);padding:8px 14px;border-radius:9px;cursor:pointer;font-weight:600;font-size:13px;}
+  .seg button.active{background:var(--accent2);color:#fff;}
+  .event-item{
+    display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--line);
+    border-radius:11px;margin-bottom:8px;cursor:pointer;background:var(--panel2);transition:.12s;
+  }
+  .event-item:hover{border-color:var(--accent);}
+  .event-item .ico{font-size:20px;}
+  .event-item .meta{flex:1;min-width:0;}
+  .event-item .meta .nm{font-weight:700;font-size:14px;}
+  .event-item .meta .sub{font-size:11.5px;color:var(--muted);}
+  .badge{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--line);}
+  .badge.school{background:rgba(59,130,246,.15);color:#bdd5ff;border-color:#2c4a7a;}
+  .badge.staff{background:rgba(249,115,22,.15);color:#ffd2ab;border-color:#7a4a2c;}
+  .badge.etc{background:rgba(148,163,184,.12);color:#cbd5e1;}
+  .badge.lock{background:rgba(239,68,68,.15);color:#ffc4c4;border-color:#7a2c2c;}
+  .badge.open{background:rgba(34,197,94,.15);color:#bbf7d0;border-color:#2c7a45;}
+
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
+  .tabs button{
+    border:1px solid var(--line);background:var(--panel);color:var(--muted);
+    padding:8px 16px;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px;
+  }
+  .tabs button.active{background:var(--accent2);color:#fff;border-color:var(--accent);}
+
+  /* 순위 / 통계 */
+  .rank-controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
+  .rank-list{display:flex;flex-direction:column;gap:8px;}
+  .rank-row{
+    display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);
+    border-radius:12px;background:var(--panel2);cursor:pointer;transition:.12s;
+  }
+  .rank-row:hover{border-color:var(--accent);}
+  .rank-row .pos{font-size:18px;font-weight:800;width:34px;text-align:center;color:var(--muted);}
+  .rank-row.top1 .pos{color:var(--gold);}
+  .rank-row .pname{flex:1;font-weight:700;font-size:15px;min-width:0;}
+  .rank-row .pname .sub{font-size:11.5px;color:var(--muted);font-weight:500;}
+  .rank-row .champ{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px;}
+  .rank-row .rate{font-size:22px;font-weight:800;text-align:right;}
+  .rank-row .rate small{font-size:12px;color:var(--muted);font-weight:600;}
+  .pill{font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;margin-left:6px;}
+  .pill.hit{background:rgba(34,197,94,.16);color:#bbf7d0;}
+  .pill.miss{background:rgba(239,68,68,.16);color:#ffc4c4;}
+  .stat-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}
+  @media(max-width:680px){.stat-cards{grid-template-columns:repeat(2,1fr);}}
+  .stat-box{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center;}
+  .stat-box .big{font-size:24px;font-weight:800;}
+  .stat-box .lbl{font-size:11.5px;color:var(--muted);margin-top:3px;}
+  .lock-banner{
+    display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:11px;font-size:13px;font-weight:600;
+    background:rgba(239,68,68,.12);border:1px solid #5b2a2a;color:#ffd2d2;margin-bottom:12px;
+  }
+  .lock-banner.open{background:rgba(34,197,94,.1);border-color:#2c7a45;color:#bbf7d0;}
+  .admin-pred-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px;background:var(--panel2);}
+  .admin-pred-row .nm{flex:1;font-weight:600;}
+  .setup-warn{background:rgba(245,197,24,.1);border:1px solid #6b5a1a;color:#f5e2a0;padding:12px 14px;border-radius:11px;font-size:13px;margin-bottom:14px;}
 </style>
 </head>
 <body>
 <header>
   <div class="title-row">
-    <h1>⚽ 2026 북중미 월드컵 승부예측</h1>
-    <span class="sub">32강 토너먼트 대진표 · 친구와 승률 대결</span>
+    <h1 id="appTitle" style="cursor:pointer;">⚽ 2026 북중미 월드컵 승부예측</h1>
+    <span class="sub" id="headerSub">이벤트를 만들거나 참여 코드로 입장하세요</span>
     <span class="spacer"></span>
-    <div class="profiles" id="profiles">
-      <button class="profile-btn active" data-p="me"><span class="dot"></span><span class="pname">나</span></button>
-      <button class="profile-btn" data-p="rival"><span class="dot"></span><span class="pname">후배</span></button>
-      <button class="profile-btn" data-p="actual"><span class="dot"></span>실제결과</button>
-    </div>
-  </div>
-  <div class="toolbar">
-    <button class="btn" id="btnRename">✏️ 이름변경</button>
-    <button class="btn" id="btnAuto">🎲 32강 자동배치</button>
-    <button class="btn danger" id="btnReset">↺ 초기화</button>
-    <span class="spacer"></span>
-    <button class="btn primary" id="btnCompare">📊 승률 비교</button>
-    <button class="btn" id="btnShare">🔗 공유</button>
-    <button class="btn" id="btnImport">📥 가져오기</button>
-    <input type="file" id="fileInput" accept="application/json" />
+    <button class="btn" id="btnHome">🏠 홈</button>
   </div>
 </header>
 
 <main>
-  <p class="editing-banner">현재 편집 중: <b id="editingName">나</b>의 예측 — 32강 각 칸에는 들어갈 수 있는 자리(예: "E조 1위", "3위 A/B/C/D/F")가 정해져 있어요. 아래 국가를 드래그하거나 칩 클릭 후 맞는 칸을 누르면 배치됩니다. 경기 팀을 클릭하면 승자로 선택돼 다음 라운드로 올라가요. 각 경기 위에는 한국시간 일정이 표시됩니다.</p>
+  <!-- ============ 홈 화면 ============ -->
+  <div id="screenHome" class="screen">
+    <div id="setupWarn" class="setup-warn hidden">
+      ⚠️ Supabase 연결이 설정되지 않았어요. <b>config.js</b>에 Project URL과 anon key를 입력해야 멀티유저 기능이 동작합니다.
+    </div>
 
-  <div class="bracket-wrap">
-    <div class="bracket" id="bracket"></div>
+    <div class="card">
+      <h2>📂 이벤트 입장</h2>
+      <p class="muted">참여 코드(6자리)를 입력하거나, 아래 목록에서 이벤트를 선택하세요.</p>
+      <div class="row-2">
+        <div class="field">
+          <label>참여 코드</label>
+          <input class="input" id="joinCode" placeholder="예: A1B2C3" maxlength="6" style="text-transform:uppercase;" />
+        </div>
+        <div class="field" style="display:flex;align-items:flex-end;">
+          <button class="btn primary" id="btnJoin" style="width:100%;">입장하기</button>
+        </div>
+      </div>
+      <div class="seg" id="eventFilter" style="margin:6px 0 12px;">
+        <button data-f="all" class="active">전체</button>
+        <button data-f="school">학교</button>
+        <button data-f="staff">직원</button>
+        <button data-f="etc">기타</button>
+      </div>
+      <div id="eventList"></div>
+    </div>
+
+    <div class="card">
+      <h2>➕ 새 이벤트 만들기 (관리자)</h2>
+      <p class="muted">이벤트를 만들면 참여 코드가 생성됩니다. 관리자 PIN은 마감·결과입력에 필요하니 꼭 기억하세요.</p>
+      <div class="field">
+        <label>이벤트 이름</label>
+        <input class="input" id="newEventName" placeholder="예: 재활치료팀 월드컵 예측" />
+      </div>
+      <div class="row-2">
+        <div class="field">
+          <label>분류</label>
+          <select class="input" id="newEventType">
+            <option value="school">학교 (후배들)</option>
+            <option value="staff">직원 이벤트</option>
+            <option value="etc">기타</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>관리자 PIN (4자리 이상)</label>
+          <input class="input" id="newEventPin" placeholder="예: 1234" />
+        </div>
+      </div>
+      <button class="btn primary" id="btnCreateEvent">이벤트 생성</button>
+    </div>
   </div>
 
-  <section class="pool-section">
-    <div class="pool-head">
-      <h2>참여국 <span id="poolCount" style="color:var(--muted);font-weight:600;"></span></h2>
-      <span class="hint">드래그 또는 클릭 → 빈 칸 클릭</span>
-      <span class="spacer"></span>
-      <input class="search" id="poolSearch" placeholder="국가 검색 (한글/조)" />
+  <!-- ============ 이벤트 화면 ============ -->
+  <div id="screenEvent" class="screen hidden">
+    <div class="card" style="padding:14px 18px;">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span id="evIcon" class="ico" style="font-size:22px;">🏫</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:800;font-size:16px;" id="evName">이벤트</div>
+          <div class="sub" style="font-size:12px;color:var(--muted);">
+            참여코드 <b id="evCode" style="color:var(--text);"></b>
+            · <span id="evLockState"></span>
+          </div>
+        </div>
+        <button class="btn" id="btnShareEvent">🔗 코드 공유</button>
+      </div>
     </div>
-    <div class="pool" id="pool"></div>
-  </section>
+
+    <div class="tabs">
+      <button data-tab="predict" class="active">✍️ 내 예측</button>
+      <button data-tab="rank">🏆 순위·통계</button>
+      <button data-tab="admin">🔐 관리자</button>
+    </div>
+
+    <!-- 내 예측 탭 -->
+    <div id="tabPredict">
+      <div class="card" id="nameCard">
+        <h2>👤 참가자 이름</h2>
+        <p class="muted">이름을 입력하고 예측을 시작하세요. 같은 이름으로 다시 들어오면 이어서 수정할 수 있어요.</p>
+        <div class="row-2">
+          <div class="field"><input class="input" id="playerName" placeholder="이름 입력" /></div>
+          <div class="field" style="display:flex;align-items:flex-end;">
+            <button class="btn primary" id="btnStartPredict" style="width:100%;">예측 시작/불러오기</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="predictArea" class="hidden">
+        <p class="editing-banner">
+          <b id="editingName">참가자</b>님의 예측 — <span id="stageHint"></span>
+          각 경기에서 이길 팀을 클릭하면 다음 라운드로 진출합니다.
+        </p>
+        <div id="lockBanner"></div>
+
+        <div class="toolbar" style="margin-bottom:10px;">
+          <button class="btn" id="btnAuto">🎲 32강 자동배치</button>
+          <button class="btn danger" id="btnReset">↺ 초기화</button>
+          <span class="spacer"></span>
+          <button class="btn primary" id="btnSubmit">💾 제출/저장</button>
+        </div>
+
+        <div class="bracket-wrap"><div class="bracket" id="bracket"></div></div>
+
+        <section class="pool-section" id="poolSection">
+          <div class="pool-head">
+            <h2>참여국 <span id="poolCount" style="color:var(--muted);font-weight:600;"></span></h2>
+            <span class="hint">드래그 또는 클릭 → 빈 칸 클릭</span>
+            <span class="spacer"></span>
+            <input class="search" id="poolSearch" placeholder="국가 검색 (한글/조)" />
+          </div>
+          <div class="pool" id="pool"></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- 순위·통계 탭 -->
+    <div id="tabRank" class="hidden">
+      <div class="card">
+        <h2>📊 통계 요약</h2>
+        <div class="stat-cards" id="statCards"></div>
+        <div class="rank-controls">
+          <span style="font-size:12px;color:var(--muted);font-weight:600;">정렬·필터</span>
+          <select class="input" id="rankMode" style="width:auto;">
+            <option value="r32">1차: 32강 적중률</option>
+            <option value="total">2차: 전체 적중률</option>
+          </select>
+          <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;">
+            <input type="checkbox" id="onlyChamp" /> 우승국 맞힌 사람만
+          </label>
+          <input class="input" id="rankSearch" placeholder="이름 검색" style="width:auto;flex:1;min-width:120px;" />
+        </div>
+        <div id="rankNote" class="muted" style="margin-bottom:10px;"></div>
+        <div class="rank-list" id="rankList"></div>
+      </div>
+    </div>
+
+    <!-- 관리자 탭 -->
+    <div id="tabAdmin" class="hidden">
+      <div class="card" id="adminLoginCard">
+        <h2>🔐 관리자 로그인</h2>
+        <p class="muted">이 이벤트를 만들 때 정한 관리자 PIN을 입력하세요.</p>
+        <div class="row-2">
+          <div class="field"><input class="input" id="adminPin" placeholder="관리자 PIN" /></div>
+          <div class="field" style="display:flex;align-items:flex-end;">
+            <button class="btn primary" id="btnAdminLogin" style="width:100%;">로그인</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="adminPanel" class="hidden">
+        <div class="card">
+          <h2>⚙️ 이벤트 관리</h2>
+          <div id="adminLockState" style="margin-bottom:12px;"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn" id="btnLockR32">🔒 1차(32강) 마감</button>
+            <button class="btn" id="btnLockFinal">🔒 2차(전체) 마감</button>
+            <button class="btn" id="btnEditActual">🎯 실제 결과 입력</button>
+            <button class="btn" id="btnRefreshAdmin">↻ 새로고침</button>
+          </div>
+          <p class="muted" style="margin-top:10px;">
+            1차 마감: 참가자가 32강을 더 못 바꿉니다(16강 이후만 가능). 2차 마감: 전체 수정 불가.
+          </p>
+        </div>
+        <div class="card">
+          <h2>👥 제출 현황 <span id="adminCount" style="color:var(--muted);font-weight:600;"></span></h2>
+          <div id="adminPredList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
 </main>
 
-<!-- Share modal -->
+<!-- 참가자 상세 보기 모달 -->
+<div class="overlay" id="detailModal">
+  <div class="modal" style="max-width:980px;">
+    <h2 id="detailName">참가자 예측</h2>
+    <p class="muted" id="detailSummary"></p>
+    <div class="bracket-wrap"><div class="bracket" id="detailBracket"></div></div>
+    <div class="modal-close-row"><button class="btn" data-close>닫기</button></div>
+  </div>
+</div>
+
+<!-- 코드 공유 모달 -->
 <div class="overlay" id="shareModal">
   <div class="modal">
-    <h2>🔗 예측 공유하기</h2>
-    <p class="muted">현재 편집 중인 프로필(<b id="shareProfileName"></b>)을 공유합니다. 배포된 주소라면 <b>링크</b> 하나로 바로 전달돼요. 친구가 링크를 열면 예측이 자동으로 불러와집니다.</p>
-    <label style="font-size:12px;color:var(--muted);font-weight:600;">공유 링크 (배포 주소에서 사용)</label>
+    <h2>🔗 이벤트 공유</h2>
+    <p class="muted">아래 링크를 참가자에게 보내면 바로 이 이벤트로 입장합니다.</p>
+    <label style="font-size:12px;color:var(--muted);font-weight:600;">참여 링크</label>
     <textarea class="code" id="shareLink" readonly style="min-height:54px;"></textarea>
     <button class="btn primary" id="btnCopyLink" style="margin-top:6px;">🔗 링크 복사</button>
-    <label style="font-size:12px;color:var(--muted);font-weight:600;display:block;margin-top:14px;">공유 코드 (직접 붙여넣기용)</label>
-    <textarea class="code" id="shareCode" readonly></textarea>
-    <div class="modal-close-row">
-      <button class="btn" id="btnDownload">💾 파일로 저장</button>
-      <button class="btn" id="btnCopyCode">📋 코드 복사</button>
-      <button class="btn" data-close>닫기</button>
-    </div>
-  </div>
-</div>
-
-<!-- Import modal -->
-<div class="overlay" id="importModal">
-  <div class="modal">
-    <h2>📥 예측 가져오기</h2>
-    <p class="muted">친구에게 받은 공유 코드를 붙여넣고, 어느 프로필에 저장할지 선택하세요.</p>
-    <textarea class="code" id="importCode" placeholder="여기에 공유 코드를 붙여넣으세요..."></textarea>
-    <div style="margin-top:14px;">
-      <span style="font-size:13px;color:var(--muted);margin-right:8px;">저장 위치:</span>
-      <select id="importTarget" class="search">
-        <option value="rival">후배</option>
-        <option value="me">나</option>
-        <option value="actual">실제결과</option>
-      </select>
-      <button class="btn" id="btnImportFile" style="margin-left:8px;">📄 파일에서 불러오기</button>
-    </div>
-    <div class="modal-close-row">
-      <button class="btn primary" id="btnDoImport">불러오기</button>
-      <button class="btn" data-close>닫기</button>
-    </div>
-  </div>
-</div>
-
-<!-- Compare modal -->
-<div class="overlay" id="compareModal">
-  <div class="modal" style="max-width:820px;">
-    <h2>📊 승률 비교</h2>
-    <p class="muted">각자의 예측을 <b>실제결과</b>와 비교해 라운드별 적중 팀 수로 채점합니다. (실제결과를 입력해야 비교됩니다.)</p>
-    <div id="compareBody"></div>
-    <div class="modal-close-row">
-      <button class="btn" data-close>닫기</button>
-    </div>
+    <p class="muted" style="margin-top:12px;">참여 코드: <b id="shareCodeText" style="color:var(--text);font-size:16px;"></b></p>
+    <div class="modal-close-row"><button class="btn" data-close>닫기</button></div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
+<script src="config.js"></script>
 <script src="data.js"></script>
+<script src="bracket-core.js"></script>
+<script src="db.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
