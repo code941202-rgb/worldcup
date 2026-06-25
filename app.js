@@ -601,17 +601,18 @@ async function toggleLock(which) {
 
 // 관리자: 실제 결과 입력 → 본인이 직접 브래킷을 채워서 저장
 let editingActual = false;
-function editActual() {
+async function editActual() {
+  await refreshEvent(); // 최신 저장본을 불러와 이어서 편집
   editingActual = true;
   App.playerName = "__actual__";
   App.bracket = getActual() || CORE.emptyBracket();
-  // 실제결과 입력은 마감과 무관하게 항상 편집 가능해야 하므로 임시로 phase1처럼 동작
+  // 실제결과 입력은 마감과 무관하게 항상 편집 가능
   switchTab("predict");
   document.getElementById("nameCard").classList.add("hidden");
   document.getElementById("predictArea").classList.remove("hidden");
   document.getElementById("editingName").textContent = "🎯 실제 결과";
-  document.getElementById("stageHint").textContent = "[관리자] 실제 경기 결과대로 32강 배치 후 승자를 골라 우승까지 입력하고 '제출/저장'을 누르세요.";
-  document.getElementById("lockBanner").innerHTML = `<div class="lock-banner open">🎯 실제 결과 입력 모드입니다. 저장하면 모두의 적중률이 계산돼요.</div>`;
+  document.getElementById("stageHint").textContent = "[관리자] 확정된 결과만 먼저 입력해도 됩니다. 나중에 다시 열어 이어서 수정·저장할 수 있어요.";
+  document.getElementById("lockBanner").innerHTML = `<div class="lock-banner open">🎯 실제 결과 입력 모드 — 저장하면 적중률이 갱신돼요. (여러 번 수정 가능)</div>`;
   document.getElementById("poolSection").classList.remove("hidden");
   renderBracketActual();
   renderPoolActual();
