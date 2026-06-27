@@ -456,16 +456,34 @@ function renderRanking() {
   const onlyChamp = document.getElementById("onlyChamp").checked;
   const q = (document.getElementById("rankSearch").value || "").trim().toLowerCase();
 
-  // 통계 카드
+  // 선택된 모드에 맞는 적중률(%) 계산: r32 = 32강만, total = 전체
+  const rateOf = (s) => {
+    if (mode === "r32") {
+      const r = s.score.result.r32;
+      return r.possible > 0 ? Math.round((r.hit / r.possible) * 100) : 0;
+    }
+    return s.score.rate;
+  };
+
+  if (!actual) {
+    note.textContent = "실제 결과가 아직 입력되지 않아 적중률을 계산할 수 없어요. (관리자 탭에서 입력)";
+  } else if (mode === "r32") {
+    note.textContent = "1차: 실제 32강 진출팀 중 맞힌 비율만 계산합니다. (16강 이후는 제외)";
+  } else {
+    note.textContent = "2차: 전체 라운드 적중을 합산하고, 우승 적중은 가중치 3배로 계산합니다.";
+  }
+
+  // 통계 카드 (선택 모드 기준)
   if (actual) {
-    const rates = scored.map(s => s.score.rate);
+    const rates = scored.map(rateOf);
     const avg = Math.round(rates.reduce((a, b) => a + b, 0) / rates.length);
-    const best = scored.slice().sort((a, b) => b.score.rate - a.score.rate)[0];
+    const best = scored.slice().sort((a, b) => rateOf(b) - rateOf(a))[0];
     const champCount = scored.filter(s => s.score.champHit).length;
+    const modeLabel = mode === "r32" ? "32강" : "전체";
     cards.innerHTML = `
       <div class="stat-box"><div class="big">${App.predictions.length}</div><div class="lbl">참가자 수</div></div>
-      <div class="stat-box"><div class="big">${avg}%</div><div class="lbl">평균 적중률</div></div>
-      <div class="stat-box"><div class="big">${best ? best.score.rate + "%" : "-"}</div><div class="lbl">최고 적중률 (${best ? escapeHtml(best.name) : "-"})</div></div>
+      <div class="stat-box"><div class="big">${avg}%</div><div class="lbl">평균 적중률 (${modeLabel})</div></div>
+      <div class="stat-box"><div class="big">${best ? rateOf(best) + "%" : "-"}</div><div class="lbl">최고 (${best ? escapeHtml(best.name) : "-"})</div></div>
       <div class="stat-box"><div class="big">${champCount}</div><div class="lbl">우승국 적중자</div></div>`;
   } else {
     cards.innerHTML = `<div class="stat-box"><div class="big">${App.predictions.length}</div><div class="lbl">참가자 수</div></div>`;
@@ -481,7 +499,7 @@ function renderRanking() {
       if (mode === "r32") {
         const ar = a.score.result.r32, br = b.score.result.r32;
         if (br.hit !== ar.hit) return br.hit - ar.hit;
-        return b.score.rate - a.score.rate;
+        return rateOf(b) - rateOf(a);
       }
       return b.score.totalHit - a.score.totalHit || b.score.rate - a.score.rate;
     });
@@ -496,9 +514,9 @@ function renderRanking() {
     const champHtml = champTeam ? `${champTeam.flag} ${champTeam.name}` : "미정";
     let rateHtml = "";
     if (actual) {
-      const r32hit = s.score.result.r32.hit, r32pos = s.score.result.r32.possible;
-      const detail = mode === "r32" ? `32강 ${r32hit}/${r32pos || "?"} 적중` : `총점 ${s.score.totalHit}`;
-      rateHtml = `<div class="rate">${s.score.rate}%<small> ${detail}</small></div>`;
+      const r32 = s.score.result.r32;
+      const detail = mode === "r32" ? `32강 ${r32.hit}/${r32.possible || "?"} 적중` : `총점 ${s.score.totalHit}`;
+      rateHtml = `<div class="rate">${rateOf(s)}%<small> ${detail}</small></div>`;
     } else {
       rateHtml = `<div class="rate" style="font-size:13px;color:var(--muted);">제출됨</div>`;
     }
