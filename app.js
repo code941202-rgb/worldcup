@@ -456,19 +456,27 @@ function renderRanking() {
   const onlyChamp = document.getElementById("onlyChamp").checked;
   const q = (document.getElementById("rankSearch").value || "").trim().toLowerCase();
 
-  // 선택된 모드에 맞는 적중률(%) 계산: r32 = 32강만, total = 전체
-  const rateOf = (s) => {
-    if (mode === "r32") {
-      const r = s.score.result.r32;
-      return r.possible > 0 ? Math.round((r.hit / r.possible) * 100) : 0;
+  // 선택된 모드에 맞는 적중률(%) 계산
+  //  - r32(1차): 실제 결과와 '같은 칸에 같은 팀'이 들어간 개수 / 32
+  //  - total(2차): 전체 라운드 합산(우승 가중치 3)
+  const r32ExactHit = (s) => {
+    if (!actual) return 0;
+    let hit = 0;
+    for (let i = 0; i < 32; i++) {
+      if (actual.r32[i] && s.bracket.r32[i] && s.bracket.r32[i] === actual.r32[i]) hit++;
     }
+    return hit;
+  };
+  const rateOf = (s) => {
+    if (!actual) return 0;
+    if (mode === "r32") return Math.round((r32ExactHit(s) / 32) * 100);
     return s.score.rate;
   };
 
   if (!actual) {
     note.textContent = "실제 결과가 아직 입력되지 않아 적중률을 계산할 수 없어요. (관리자 탭에서 입력)";
   } else if (mode === "r32") {
-    note.textContent = "1차: 실제 32강 진출팀 중 맞힌 비율만 계산합니다. (16강 이후는 제외)";
+    note.textContent = "1차: 실제 결과와 '같은 칸에 같은 나라'를 맞힌 개수 ÷ 32 로 계산합니다. (위치까지 정확히 일치해야 적중)";
   } else {
     note.textContent = "2차: 전체 라운드 적중을 합산하고, 우승 적중은 가중치 3배로 계산합니다.";
   }
@@ -496,11 +504,7 @@ function renderRanking() {
   // 정렬
   if (actual) {
     scored.sort((a, b) => {
-      if (mode === "r32") {
-        const ar = a.score.result.r32, br = b.score.result.r32;
-        if (br.hit !== ar.hit) return br.hit - ar.hit;
-        return rateOf(b) - rateOf(a);
-      }
+      if (mode === "r32") return r32ExactHit(b) - r32ExactHit(a);
       return b.score.totalHit - a.score.totalHit || b.score.rate - a.score.rate;
     });
   } else {
@@ -514,8 +518,7 @@ function renderRanking() {
     const champHtml = champTeam ? `${champTeam.flag} ${champTeam.name}` : "미정";
     let rateHtml = "";
     if (actual) {
-      const r32 = s.score.result.r32;
-      const detail = mode === "r32" ? `32강 ${r32.hit}/${r32.possible || "?"} 적중` : `총점 ${s.score.totalHit}`;
+      const detail = mode === "r32" ? `${r32ExactHit(s)}/32 정확` : `총점 ${s.score.totalHit}`;
       rateHtml = `<div class="rate">${rateOf(s)}%<small> ${detail}</small></div>`;
     } else {
       rateHtml = `<div class="rate" style="font-size:13px;color:var(--muted);">제출됨</div>`;
