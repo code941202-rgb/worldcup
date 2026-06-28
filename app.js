@@ -544,14 +544,31 @@ function openDetail(predId) {
   document.getElementById("detailName").textContent = `${p.name} 님의 예측`;
   let summary = "";
   if (actual) {
+    // 32강: 위치까지 정확히 일치한 칸 수 / 32
+    let r32exact = 0;
+    for (let i = 0; i < 32; i++) if (actual.r32[i] && b.r32[i] && b.r32[i] === actual.r32[i]) r32exact++;
     const sc = CORE.score(b, actual);
-    summary = `적중률 ${sc.rate}% · 32강 ${sc.result.r32.hit}/${sc.result.r32.possible} · 16강 ${sc.result.r16.hit}/${sc.result.r16.possible} · 우승 ${sc.champHit ? "적중 ✅" : "실패 ❌"}`;
+    const r32rate = Math.round((r32exact / 32) * 100);
+    summary = `32강 정확도 ${r32rate}% (${r32exact}/32) · 우승 ${sc.champHit ? "적중 ✅" : "실패 ❌"} · 초록=정답위치 / 빨강=오답`;
   } else {
     const champ = b.champion ? TEAM_MAP[b.champion] : null;
     summary = `예측 우승국: ${champ ? champ.flag + " " + champ.name : "미정"}`;
   }
   document.getElementById("detailSummary").textContent = summary;
   document.getElementById("detailBracket").innerHTML = buildBracketHTML(b, { interactive: false });
+
+  // 실제 결과와 비교해 32강 각 칸을 정답(초록)/오답(빨강)으로 표시
+  if (actual) {
+    const wrap = document.getElementById("detailBracket");
+    wrap.querySelectorAll('.slot[data-round="r32"]').forEach(slot => {
+      const idx = parseInt(slot.dataset.idx, 10);
+      const team = slot.dataset.team;
+      slot.classList.remove("winner", "loser");
+      if (!team) return;
+      if (actual.r32[idx] && team === actual.r32[idx]) slot.classList.add("cmp-correct");
+      else slot.classList.add("cmp-wrong");
+    });
+  }
   showModal("detailModal");
 }
 

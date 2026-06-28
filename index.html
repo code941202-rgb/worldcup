@@ -107,6 +107,11 @@
   .slot.winner{border-left-color:var(--accent);background:rgba(34,197,94,.10);}
   .slot.winner .name{color:#bbf7d0;}
   .slot.loser{opacity:.42;}
+  /* 상세보기 실제결과 비교: 정답 위치(초록) / 오답(빨강) */
+  .slot.cmp-correct{background:rgba(34,197,94,.22) !important;border-left-color:var(--accent) !important;}
+  .slot.cmp-correct .name{color:#bbf7d0 !important;}
+  .slot.cmp-wrong{background:rgba(239,68,68,.18) !important;border-left-color:var(--danger) !important;}
+  .slot.cmp-wrong .name{color:#ffc4c4 !important;}
   /* 선택된 칩이 들어갈 수 있는 빈 칸: 형광 강조 + 펄스 */
   .slot.eligible{
     background:rgba(34,197,94,.18) !important;
