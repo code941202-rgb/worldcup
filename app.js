@@ -154,6 +154,21 @@ async function refreshPredictions() {
 }
 
 /* ===================== 참가자: 예측 시작 ===================== */
+// 2차 모드에서 베이스가 되는 실제 32강 진출팀 (없으면 null)
+function actualR32() {
+  const a = getActual();
+  return (a && Array.isArray(a.r32) && a.r32.some(Boolean)) ? a.r32 : null;
+}
+// 2차이면 참가자 32강을 실제 32강으로 고정
+function applyPhase2Base() {
+  if (stage() !== "phase2") return;
+  const ar = actualR32();
+  if (ar) {
+    App.bracket.r32 = ar.slice();
+    CORE.validate(App.bracket); // 실제 32강과 안 맞는 기존 16강 이후 선택은 정리됨
+  }
+}
+
 async function startPredict() {
   const name = document.getElementById("playerName").value.trim();
   if (!name) { toast("이름을 입력하세요."); return; }
@@ -164,6 +179,7 @@ async function startPredict() {
     else { App.bracket = CORE.emptyBracket(); App.myPredId = null; }
   } catch (e) { App.bracket = CORE.emptyBracket(); }
   CORE.validate(App.bracket);
+  applyPhase2Base();
   document.getElementById("nameCard").classList.add("hidden");
   document.getElementById("predictArea").classList.remove("hidden");
   document.getElementById("editingName").textContent = name;
@@ -188,8 +204,13 @@ function renderStageHint() {
     banner.innerHTML = "";
     poolSection.classList.remove("hidden");
   } else if (s === "phase2") {
-    hint.textContent = "[2차] 32강은 마감되어 수정할 수 없어요. 16강부터 우승까지 승자를 고르세요.";
-    banner.innerHTML = `<div class="lock-banner">🔒 1차(32강)가 마감되었습니다. 32강 배치는 고정되고 16강 이후만 수정 가능해요.</div>`;
+    const hasActual = !!actualR32();
+    hint.textContent = hasActual
+      ? "[2차] 실제 32강 진출국이 고정되어 있어요. 16강부터 우승까지 이길 팀을 클릭해 선택하세요."
+      : "[2차] 32강이 마감되었습니다. (관리자가 실제 32강 진출국을 입력하면 그 팀들 기준으로 16강부터 예측하게 됩니다.)";
+    banner.innerHTML = hasActual
+      ? `<div class="lock-banner open">✅ 실제 32강 진출 32개국이 표시돼요. 16강 이후 승자만 고르면 됩니다.</div>`
+      : `<div class="lock-banner">🔒 1차(32강) 마감됨 — 실제 32강 진출국 입력 대기 중이에요.</div>`;
     poolSection.classList.add("hidden");
   } else {
     hint.textContent = "이 이벤트는 최종 마감되었습니다. 결과는 순위·통계 탭에서 확인하세요.";
@@ -263,9 +284,10 @@ function resetMine() {
   if (!editable()) { toast("마감되어 초기화할 수 없어요."); return; }
   if (!confirm("내 예측을 초기화할까요?")) return;
   if (r32Editable()) App.bracket = CORE.emptyBracket();
-  else { // 2차에선 32강 유지, 이후만 리셋
+  else { // 2차에선 32강(실제 진출국) 유지, 16강 이후만 리셋
     App.bracket.r16 = new Array(16).fill(null); App.bracket.r8 = new Array(8).fill(null);
     App.bracket.r4 = new Array(4).fill(null); App.bracket.r2 = new Array(2).fill(null); App.bracket.champion = null;
+    applyPhase2Base();
   }
   renderBracket(); renderPool(); toast("초기화 완료");
 }
@@ -458,7 +480,7 @@ function renderRanking() {
 
   // 선택된 모드에 맞는 적중률(%) 계산
   //  - r32(1차): 실제 결과와 '같은 칸에 같은 팀'이 들어간 개수 / 32
-  //  - total(2차): 전체 라운드 합산(우승 가중치 3)
+  //  - total(2차): 16강~우승만 평가(32강 제외). 우승 가중치 3.
   const r32ExactHit = (s) => {
     if (!actual) return 0;
     let hit = 0;
@@ -467,10 +489,27 @@ function renderRanking() {
     }
     return hit;
   };
+  const phase2Hit = (s) => {
+    if (!actual) return 0;
+    let hit = 0;
+    ["r16", "r8", "r4", "r2"].forEach(k => {
+      const actSet = new Set((actual[k] || []).filter(Boolean));
+      new Set((s.bracket[k] || []).filter(Boolean)).forEach(id => { if (actSet.has(id)) hit++; });
+    });
+    if (actual.champion && s.bracket.champion === actual.champion) hit += 3; // 우승 가중치 3
+    return hit;
+  };
+  const phase2Possible = (() => {
+    if (!actual) return 0;
+    let p = 0;
+    ["r16", "r8", "r4", "r2"].forEach(k => p += new Set((actual[k] || []).filter(Boolean)).size);
+    if (actual.champion) p += 3;
+    return p;
+  })();
   const rateOf = (s) => {
     if (!actual) return 0;
     if (mode === "r32") return Math.round((r32ExactHit(s) / 32) * 100);
-    return s.score.rate;
+    return phase2Possible > 0 ? Math.round((phase2Hit(s) / phase2Possible) * 100) : 0;
   };
 
   if (!actual) {
@@ -478,7 +517,7 @@ function renderRanking() {
   } else if (mode === "r32") {
     note.textContent = "1차: 실제 결과와 '같은 칸에 같은 나라'를 맞힌 개수 ÷ 32 로 계산합니다. (위치까지 정확히 일치해야 적중)";
   } else {
-    note.textContent = "2차: 전체 라운드 적중을 합산하고, 우승 적중은 가중치 3배로 계산합니다.";
+    note.textContent = "2차: 16강·8강·4강·결승 진출팀과 우승국(가중치 3배) 적중을 합산합니다. (32강은 제외)";
   }
 
   // 통계 카드 (선택 모드 기준)
@@ -487,7 +526,7 @@ function renderRanking() {
     const avg = Math.round(rates.reduce((a, b) => a + b, 0) / rates.length);
     const best = scored.slice().sort((a, b) => rateOf(b) - rateOf(a))[0];
     const champCount = scored.filter(s => s.score.champHit).length;
-    const modeLabel = mode === "r32" ? "32강" : "전체";
+    const modeLabel = mode === "r32" ? "32강" : "2차";
     cards.innerHTML = `
       <div class="stat-box"><div class="big">${App.predictions.length}</div><div class="lbl">참가자 수</div></div>
       <div class="stat-box"><div class="big">${avg}%</div><div class="lbl">평균 적중률 (${modeLabel})</div></div>
@@ -505,7 +544,9 @@ function renderRanking() {
   if (actual) {
     scored.sort((a, b) => {
       if (mode === "r32") return r32ExactHit(b) - r32ExactHit(a);
-      return b.score.totalHit - a.score.totalHit || b.score.rate - a.score.rate;
+      // 2차: 우승 적중 우선 → 16강~우승 점수 순
+      if ((b.score.champHit ? 1 : 0) !== (a.score.champHit ? 1 : 0)) return (b.score.champHit ? 1 : 0) - (a.score.champHit ? 1 : 0);
+      return phase2Hit(b) - phase2Hit(a);
     });
   } else {
     scored.sort((a, b) => a.name.localeCompare(b.name));
@@ -518,7 +559,7 @@ function renderRanking() {
     const champHtml = champTeam ? `${champTeam.flag} ${champTeam.name}` : "미정";
     let rateHtml = "";
     if (actual) {
-      const detail = mode === "r32" ? `${r32ExactHit(s)}/32 정확` : `총점 ${s.score.totalHit}`;
+      const detail = mode === "r32" ? `${r32ExactHit(s)}/32 정확` : `16강~우승 ${phase2Hit(s)}/${phase2Possible}`;
       rateHtml = `<div class="rate">${rateOf(s)}%<small> ${detail}</small></div>`;
     } else {
       rateHtml = `<div class="rate" style="font-size:13px;color:var(--muted);">제출됨</div>`;
