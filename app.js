@@ -23,6 +23,7 @@ function show(id) {
 }
 function goHome() {
   App.event = null; App.isAdmin = false; App.adminPin = null; App.playerName = null;
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   history.replaceState(null, "", location.origin + location.pathname);
   document.getElementById("headerSub").textContent = "이벤트를 만들거나 참여 코드로 입장하세요";
   show("screenHome");
@@ -112,13 +113,39 @@ function renderEventHeader() {
 }
 
 /* ===================== 탭 ===================== */
+let pollTimer = null;
+let currentTab = "predict";
 function switchTab(tab) {
+  currentTab = tab;
   document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
   document.getElementById("tabPredict").classList.toggle("hidden", tab !== "predict");
   document.getElementById("tabRank").classList.toggle("hidden", tab !== "rank");
   document.getElementById("tabAdmin").classList.toggle("hidden", tab !== "admin");
-  if (tab === "rank") renderRanking();
+  setupPolling(tab);
+  if (tab === "rank") refreshAndRenderRank();
   if (tab === "admin" && App.isAdmin) renderAdminPanel();
+}
+
+// 순위 탭: 최신 제출 불러온 뒤 렌더
+async function refreshAndRenderRank() {
+  await refreshPredictions();
+  renderRanking();
+}
+
+// 순위/관리자 탭에 있는 동안 주기적으로 자동 새로고침(실시간 느낌)
+function setupPolling(tab) {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  if (tab === "rank" || tab === "admin") {
+    pollTimer = setInterval(async () => {
+      if (!App.event) return;
+      // 입력 중 방해 방지: 모달 열려있으면 건너뜀
+      if (document.querySelector(".overlay.show")) return;
+      await refreshEvent();
+      await refreshPredictions();
+      if (currentTab === "rank") renderRanking();
+      else if (currentTab === "admin" && App.isAdmin) renderAdminPanelView();
+    }, 12000);
+  }
 }
 
 /* ===================== 새 이벤트 생성 ===================== */
@@ -295,6 +322,10 @@ function resetMine() {
 async function submitMine() {
   if (!editable()) { toast("마감되어 제출할 수 없어요."); return; }
   if (!App.playerName) { toast("이름을 먼저 입력하세요."); return; }
+  // 미완성(빈칸) 제출 시 경고
+  if (!isComplete(App.bracket)) {
+    if (!confirm("아직 우승국까지 다 고르지 않았어요. 빈칸이 있는 채로 제출할까요?\n(나중에 같은 이름으로 다시 들어와 마저 채울 수 있어요.)")) return;
+  }
   try {
     await DB.savePrediction(App.event.id, App.playerName, App.bracket);
     await refreshPredictions();
@@ -631,6 +662,11 @@ async function adminLogin() {
 async function renderAdminPanel() {
   await refreshEvent();
   await refreshPredictions();
+  renderAdminPanelView();
+}
+
+// 데이터 재요청 없이 현재 App 상태로 화면만 렌더 (폴링용)
+function renderAdminPanelView() {
   const ev = App.event;
   const st = document.getElementById("adminLockState");
   st.innerHTML = `
@@ -641,15 +677,20 @@ async function renderAdminPanel() {
   document.getElementById("btnLockFinal").textContent = ev.final_locked ? "🔓 2차(전체) 마감 해제" : "🔒 2차(전체) 마감";
 
   const listEl = document.getElementById("adminPredList");
-  document.getElementById("adminCount").textContent = `(${App.predictions.length}명)`;
+  document.getElementById("adminCount").textContent = `(${App.predictions.length}명) · 12초마다 자동 새로고침`;
   if (!App.predictions.length) { listEl.innerHTML = `<p class="muted">아직 제출이 없어요.</p>`; return; }
   const actual = getActual();
   const scored = computeScores();
   listEl.innerHTML = scored.map(s => {
     const champ = s.bracket.champion ? TEAM_MAP[s.bracket.champion] : null;
     const rate = actual ? `${s.score.rate}%` : "—";
+    const done = isComplete(s.bracket);
+    const status = done
+      ? `<span class="badge open" style="font-size:10px;">완성</span>`
+      : `<span class="badge lock" style="font-size:10px;">미완성</span>`;
     return `<div class="admin-pred-row">
       <span class="nm">${escapeHtml(s.name)}</span>
+      ${status}
       <span class="muted" style="font-size:12px;">🏆 ${champ ? champ.flag + champ.name : "미정"}</span>
       <span style="font-weight:700;">${rate}</span>
       <button class="btn" data-view="${s.id}" style="padding:5px 10px;">보기</button>
@@ -658,6 +699,12 @@ async function renderAdminPanel() {
   }).join("");
   listEl.querySelectorAll("[data-view]").forEach(b => b.addEventListener("click", () => openDetail(b.dataset.view)));
   listEl.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => adminDelete(b.dataset.del)));
+}
+
+// 우승까지 모든 칸이 채워졌는지(미완성 여부 판단)
+function isComplete(b) {
+  const filled = (arr) => Array.isArray(arr) && arr.every(Boolean);
+  return filled(b.r32) && filled(b.r16) && filled(b.r8) && filled(b.r4) && filled(b.r2) && !!b.champion;
 }
 
 async function refreshEvent() {
