@@ -621,7 +621,7 @@ function openDetail(predId) {
     for (let i = 0; i < 32; i++) if (actual.r32[i] && b.r32[i] && b.r32[i] === actual.r32[i]) r32exact++;
     const sc = CORE.score(b, actual);
     const r32rate = Math.round((r32exact / 32) * 100);
-    summary = `32강 정확도 ${r32rate}% (${r32exact}/32) · 우승 ${sc.champHit ? "적중 ✅" : "실패 ❌"} · 초록=정답위치 / 빨강=오답`;
+    summary = `32강 ${r32exact}/32 정확 · 우승 ${sc.champHit ? "적중 ✅" : "실패 ❌"} · 🟩실제와 일치 / 🟥불일치 / 무색=관리자 미입력`;
   } else {
     const champ = b.champion ? TEAM_MAP[b.champion] : null;
     summary = `예측 우승국: ${champ ? champ.flag + " " + champ.name : "미정"}`;
@@ -629,17 +629,25 @@ function openDetail(predId) {
   document.getElementById("detailSummary").textContent = summary;
   document.getElementById("detailBracket").innerHTML = buildBracketHTML(b, { interactive: false });
 
-  // 실제 결과와 비교해 32강 각 칸을 정답(초록)/오답(빨강)으로 표시
+  // 실제 결과와 비교: 같은 칸·같은 나라면 초록, 다르면 빨강, 실제 미입력 칸은 색 없음
   if (actual) {
     const wrap = document.getElementById("detailBracket");
-    wrap.querySelectorAll('.slot[data-round="r32"]').forEach(slot => {
+    wrap.querySelectorAll(".slot").forEach(slot => {
+      const rk = slot.dataset.round;
       const idx = parseInt(slot.dataset.idx, 10);
       const team = slot.dataset.team;
-      slot.classList.remove("winner", "loser");
-      if (!team) return;
-      if (actual.r32[idx] && team === actual.r32[idx]) slot.classList.add("cmp-correct");
-      else slot.classList.add("cmp-wrong");
+      slot.classList.remove("winner", "loser", "cmp-correct", "cmp-wrong");
+      if (!team || !rk) return;
+      const act = actual[rk];
+      if (!Array.isArray(act) || !act[idx]) return; // 관리자가 아직 입력 안 한 칸 → 색 없음
+      slot.classList.add(team === act[idx] ? "cmp-correct" : "cmp-wrong");
     });
+    // 우승 박스
+    const champBox = wrap.querySelector(".champion-box");
+    if (champBox) {
+      champBox.classList.remove("cmp-correct", "cmp-wrong");
+      if (actual.champion && b.champion) champBox.classList.add(b.champion === actual.champion ? "cmp-correct" : "cmp-wrong");
+    }
   }
   showModal("detailModal");
 }
