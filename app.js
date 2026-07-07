@@ -520,21 +520,23 @@ function renderRanking() {
     }
     return hit;
   };
+  // 2차 채점 구성(만점 23): 16강 진출 16 + 8강 승자(4강 진출) 4 + 4강 승자(결승 진출) 2 + 우승 1
+  const PHASE2_ROUNDS = ["r16", "r4", "r2"];
   const phase2Hit = (s) => {
     if (!actual) return 0;
     let hit = 0;
-    ["r16", "r8", "r4", "r2"].forEach(k => {
+    PHASE2_ROUNDS.forEach(k => {
       const actSet = new Set((actual[k] || []).filter(Boolean));
       new Set((s.bracket[k] || []).filter(Boolean)).forEach(id => { if (actSet.has(id)) hit++; });
     });
-    if (actual.champion && s.bracket.champion === actual.champion) hit += 3; // 우승 가중치 3
+    if (actual.champion && s.bracket.champion === actual.champion) hit += 1;
     return hit;
   };
   const phase2Possible = (() => {
     if (!actual) return 0;
     let p = 0;
-    ["r16", "r8", "r4", "r2"].forEach(k => p += new Set((actual[k] || []).filter(Boolean)).size);
-    if (actual.champion) p += 3;
+    PHASE2_ROUNDS.forEach(k => p += new Set((actual[k] || []).filter(Boolean)).size);
+    if (actual.champion) p += 1;
     return p;
   })();
   const rateOf = (s) => {
@@ -548,7 +550,7 @@ function renderRanking() {
   } else if (mode === "r32") {
     note.textContent = "1차: 실제 결과와 '같은 칸에 같은 나라'를 맞힌 개수 ÷ 32 로 계산합니다. (위치까지 정확히 일치해야 적중)";
   } else {
-    note.textContent = "2차: 16강·8강·4강·결승 진출팀과 우승국(가중치 3배) 적중을 합산합니다. (32강은 제외)";
+    note.textContent = `2차 만점 ${phase2Possible}점: 16강 진출(16) + 8강 승자·4강진출(4) + 4강 승자·결승진출(2) + 우승(1). 실제 결과와 맞는 팀 수로 채점.`;
   }
 
   // 통계 카드 (선택 모드 기준)
